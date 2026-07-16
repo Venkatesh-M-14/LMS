@@ -48,6 +48,18 @@ import {
   buildCertificateVerifyRouter,
   buildGamificationRouter,
 } from './modules/gamification/http/gamificationRouter';
+import { MentorService } from './modules/mentor/application/mentorService';
+import { PrismaMentorRepository } from './modules/mentor/infrastructure/prismaMentorRepository';
+import { AnthropicProvider } from './modules/mentor/infrastructure/anthropicProvider';
+import {
+  FakeMentorProvider,
+  UnconfiguredMentorProvider,
+} from './modules/mentor/infrastructure/fakeProvider';
+import { buildMentorRouter } from './modules/mentor/http/mentorRouter';
+import type { LlmProvider } from './modules/mentor/application/llmProvider';
+import { AdaptiveService } from './modules/adaptive/application/adaptiveService';
+import { PrismaAdaptiveRepository } from './modules/adaptive/infrastructure/prismaAdaptiveRepository';
+import { buildAdaptiveRouter } from './modules/adaptive/http/adaptiveRouter';
 import { ProjectService } from './modules/projects/application/projectService';
 import { PrismaProjectRepository } from './modules/projects/infrastructure/prismaProjectRepository';
 import {
@@ -74,6 +86,8 @@ export interface Container {
     cmsProjects: Router;
     gamification: Router;
     certificateVerify: Router;
+    mentor: Router;
+    adaptive: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   eventBus: EventBus;
@@ -131,9 +145,14 @@ export async function buildContainer(env: Env): Promise<Container> {
   const curriculum = new CurriculumQueryService(prisma);
 
   const eventBus = new EventBus(logger);
+  const adaptiveService = new AdaptiveService({
+    repo: new PrismaAdaptiveRepository(prisma),
+    logger,
+  });
   const progressService = new ProgressService(new PrismaProgressRepository(prisma), eventBus);
   // Progress subscribes: a graded, passed quiz completes its lesson (cascade).
   eventBus.on('AttemptGraded', (event) => progressService.onAttemptGraded(event));
+  eventBus.on('AttemptGraded', (event) => adaptiveService.onAttemptGraded(event));
 
   // Gamification subscribes to the same events for XP, achievements, certificates.
   const gamificationService = new GamificationService({
@@ -146,6 +165,24 @@ export async function buildContainer(env: Env): Promise<Container> {
   eventBus.on('ProjectApproved', (event) => gamificationService.onProjectApproved(event));
   eventBus.on('LessonCompleted', (event) => gamificationService.onLessonCompleted(event));
 
+  // AI Mentor provider: real Anthropic when a key is present, deterministic
+  // fake when explicitly selected (dev/CI), else an unconfigured placeholder.
+  let mentorProvider: LlmProvider;
+  if (env.MENTOR_PROVIDER === 'fake') {
+    mentorProvider = new FakeMentorProvider();
+  } else if (env.ANTHROPIC_API_KEY) {
+    mentorProvider = new AnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, model: env.MENTOR_MODEL });
+  } else {
+    mentorProvider = new UnconfiguredMentorProvider();
+  }
+  const mentorService = new MentorService({
+    repo: new PrismaMentorRepository(prisma),
+    provider: mentorProvider,
+    clock,
+    dailyTokenBudget: env.MENTOR_DAILY_TOKEN_BUDGET,
+    logger,
+  });
+
   const assessmentRepo = new PrismaAssessmentRepository(prisma);
   const attemptRepo = new PrismaAttemptRepository(prisma);
   const gradingRepo = new PrismaGradingRepository(prisma);
@@ -157,6 +194,7 @@ export async function buildContainer(env: Env): Promise<Container> {
     events: eventBus,
     accessGate: progressService,
     judgeQueue,
+    retakeGate: adaptiveService,
   });
   const attemptFinalizer = new AttemptFinalizer({
     attempts: attemptRepo,
@@ -214,7 +252,12 @@ export async function buildContainer(env: Env): Promise<Container> {
       }),
       users: buildUsersRouter({ users, prisma, authenticate }),
       health: buildHealthRouter({ prisma, redis }),
-      curriculum: buildCurriculumRouter({ curriculum, gate: progressService, authenticate }),
+      curriculum: buildCurriculumRouter({
+        curriculum,
+        gate: progressService,
+        onLessonOpened: (userId, lessonId) => adaptiveService.onLessonOpened(userId, lessonId),
+        authenticate,
+      }),
       cms: buildCmsRouter({ authoring, authenticate }),
       cmsAssessments: buildCmsAssessmentsRouter({
         authoring: assessmentAuthoring,
@@ -227,6 +270,8 @@ export async function buildContainer(env: Env): Promise<Container> {
       cmsProjects: buildCmsProjectsRouter({ projects: projectService, authenticate }),
       gamification: buildGamificationRouter({ gamification: gamificationService, authenticate }),
       certificateVerify: buildCertificateVerifyRouter({ gamification: gamificationService }),
+      mentor: buildMentorRouter({ mentor: mentorService, authenticate }),
+      adaptive: buildAdaptiveRouter({ adaptive: adaptiveService, authenticate }),
     },
     globalRateLimiter,
     eventBus,

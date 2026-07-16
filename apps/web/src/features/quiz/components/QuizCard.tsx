@@ -12,6 +12,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router';
+import { ApiClientError } from '../../../shared/api/client';
 import { fetchQuizSummary, quizKeys, startAttempt } from '../api';
 
 /** The quiz entry point shown at the bottom of a lesson. */
@@ -65,9 +67,35 @@ export function QuizCard({ lessonId }: { lessonId: string }) {
         </Typography>
 
         {startMutation.isError ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {t('quiz.startFailed')}
-          </Alert>
+          startMutation.error instanceof ApiClientError &&
+          startMutation.error.code === 'REVISION_REQUIRED' ? (
+            <Alert severity="warning" sx={{ mb: 2 }} data-testid="retake-blocked">
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                {t('adaptive.retakeBlockedTitle')}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                {t('adaptive.retakeBlockedBody')}
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                {(startMutation.error.details ?? []).map((d) => (
+                  <Button
+                    key={d.path}
+                    component={RouterLink}
+                    to={`/lessons/${d.path}`}
+                    size="small"
+                    variant="outlined"
+                    startIcon={<ReplayIcon />}
+                  >
+                    {d.message}
+                  </Button>
+                ))}
+              </Stack>
+            </Alert>
+          ) : (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {t('quiz.startFailed')}
+            </Alert>
+          )
         ) : null}
 
         <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>

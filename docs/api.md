@@ -153,6 +153,26 @@ Gating errors elsewhere: `GET /curriculum/lessons/:id` and `POST /assessments/:i
 
 XP is awarded by event subscribers (quiz pass, lesson complete, project approved), idempotent on a deterministic key; there is no client-facing award endpoint.
 
+## AI Mentor _(Bearer token)_
+
+| Endpoint                                          | Purpose                                                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /mentor/budget`                              | `{ configured, dailyTokenBudget, tokensUsedToday, remaining }` — drives the budget bar and not-configured state |
+| `GET /mentor/conversations`                       | The caller's conversations, most-recently-updated first                                                     |
+| `POST /mentor/conversations`                      | Start a conversation; optional `{ lessonId }` grounds it in that lesson's published content (`MENTOR_NOT_CONFIGURED` 503 if no provider) |
+| `GET /mentor/conversations/:id`                   | Conversation detail with message history                                                                    |
+| `POST /mentor/conversations/:id/messages`         | **SSE stream.** Body `{ message }` (1–4000 chars). Emits `data: <json>` frames: `start` → `delta`\* → `done` (`{ content, tokensUsedToday, remaining }`) or `error` (`MENTOR_NOT_CONFIGURED` / `MENTOR_BUDGET_EXCEEDED` / `FORBIDDEN`) |
+
+Grounding uses only currently-published lesson content — never hidden tests, answer keys, or solutions. Usage counts against a per-user daily token budget (`MentorUsage`, keyed by user-local date).
+
+## Adaptive learning _(Bearer token)_
+
+| Endpoint                  | Purpose                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `GET /adaptive/revisions` | The caller's revision assignments (`ASSIGNED` / `COMPLETED`) with skill, target lesson, and reason |
+
+Failing a quiz assigns a `RevisionAssignment` per weak (missed skill-tagged) item, targeting the failed lesson. While one is open and blocking, starting a new attempt returns `REVISION_REQUIRED` 409 (its `details` list the lessons to review); opening the target lesson completes the assignment and unblocks the retake.
+
 ## Certificate verification _(public, no auth)_
 
 `GET /verify/:code` → `{ valid, serial, holderName, scope, scopeTitle, issuedAt }`. Returns `{ valid: false, … }` for an unknown code. Backs the shareable `/verify/:code` page.

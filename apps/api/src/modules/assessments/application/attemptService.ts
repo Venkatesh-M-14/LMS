@@ -38,6 +38,10 @@ export interface AttemptServiceDeps {
   };
   /** BullMQ adapter; absent in unit tests that never submit coding items. */
   judgeQueue?: JudgeQueuePort;
+  /** Adaptive-learning retake gate: open revision assignments block retries. */
+  retakeGate?: {
+    assertRetakeAllowed(userId: string, assessmentId: string): Promise<void>;
+  };
   /** Injectable for deterministic shuffle tests. */
   random?: () => number;
 }
@@ -112,6 +116,10 @@ export class AttemptService {
     if (decision.resumeAttemptId) {
       const existing = await this.deps.attempts.findById(decision.resumeAttemptId);
       if (existing) return this.toInProgress(existing, assessment);
+    }
+    // Adaptive gate: a retake is blocked while revision assignments are open.
+    if (facts.length > 0 && this.deps.retakeGate) {
+      await this.deps.retakeGate.assertRetakeAllowed(userId, assessmentId);
     }
     if (!decision.canStart) {
       if (decision.blockedReason === 'MAX_ATTEMPTS') {
@@ -273,6 +281,7 @@ export class AttemptService {
     if (!pending && this.deps.events) {
       await this.deps.events.emit('AttemptGraded', {
         userId,
+        attemptId,
         assessmentId: assessment.id,
         lessonId: assessment.lessonId,
         passed: passed!,

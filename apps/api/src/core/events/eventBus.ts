@@ -12,6 +12,7 @@ import type { Logger } from '../logging/logger';
 export interface DomainEvents {
   AttemptGraded: {
     userId: string;
+    attemptId: string;
     assessmentId: string;
     lessonId: string | null;
     passed: boolean;

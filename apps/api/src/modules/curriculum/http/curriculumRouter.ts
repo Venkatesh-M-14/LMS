@@ -13,6 +13,8 @@ export interface CurriculumGate {
 export interface CurriculumRouterDeps {
   curriculum: CurriculumQueryService;
   gate: CurriculumGate;
+  /** Adaptive hook: opening a lesson clears matching revision assignments. */
+  onLessonOpened?: (userId: string, lessonId: string) => Promise<void>;
   authenticate: RequestHandler;
 }
 
@@ -36,6 +38,7 @@ export function buildCurriculumRouter(deps: CurriculumRouterDeps): Router {
       await deps.gate.assertLessonAccessible(req.user!, lessonId);
       const lesson = await deps.curriculum.getLessonRead(lessonId);
       await deps.gate.markLessonOpened(req.user!, lessonId);
+      if (deps.onLessonOpened) await deps.onLessonOpened(req.user!.id, lessonId);
       ok(res, lesson);
     }),
   );

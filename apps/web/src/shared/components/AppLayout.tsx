@@ -101,6 +101,9 @@ export function AppLayout() {
             <Button component={RouterLink} to="/curriculum" color="inherit" size="small">
               {t('nav.curriculum')}
             </Button>
+            <Button component={RouterLink} to="/mentor" color="inherit" size="small">
+              {t('nav.mentor')}
+            </Button>
             {user && (user.role === 'INSTRUCTOR' || user.role === 'ADMIN') ? (
               <>
                 <Button component={RouterLink} to="/instructor" color="inherit" size="small">

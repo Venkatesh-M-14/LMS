@@ -26,6 +26,12 @@ const envSchema = z.object({
   RATE_LIMIT_GLOBAL_PER_MIN: z.coerce.number().int().positive().default(300),
   /** Concurrent sandbox processes per judge worker. */
   JUDGE_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
+  // AI Mentor (Claude API). Absent key → mentor reports "not configured".
+  ANTHROPIC_API_KEY: z.string().optional(),
+  MENTOR_MODEL: z.string().default('claude-sonnet-5'),
+  /** 'anthropic' (real API) or 'fake' (deterministic, for dev/CI). */
+  MENTOR_PROVIDER: z.enum(['anthropic', 'fake']).default('anthropic'),
+  MENTOR_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(50_000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

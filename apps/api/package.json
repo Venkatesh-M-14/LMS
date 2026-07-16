@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@academy/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@prisma/client": "^6.11.0",
     "argon2": "^0.43.0",
     "bullmq": "^5.80.5",

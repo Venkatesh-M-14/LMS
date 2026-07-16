@@ -20,6 +20,7 @@ import { ProjectReviewPage } from '../features/projects/ProjectReviewPage';
 import { LeaderboardPage } from '../features/gamification/LeaderboardPage';
 import { AchievementsPage } from '../features/gamification/AchievementsPage';
 import { CertificatesPage } from '../features/gamification/CertificatesPage';
+import { MentorPage } from '../features/mentor/MentorPage';
 import { VerifyCertificatePage } from '../features/gamification/VerifyCertificatePage';
 import { NotFoundPage } from '../shared/components/NotFoundPage';
 
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
               { path: '/lessons/:lessonId', element: <LessonPage /> },
               { path: '/attempts/:attemptId', element: <AttemptPage /> },
               { path: '/projects/topic/:topicId', element: <ProjectPage /> },
+              { path: '/mentor', element: <MentorPage /> },
               { path: '/leaderboard', element: <LeaderboardPage /> },
               { path: '/achievements', element: <AchievementsPage /> },
               { path: '/certificates', element: <CertificatesPage /> },

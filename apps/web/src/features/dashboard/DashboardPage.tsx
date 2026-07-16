@@ -17,6 +17,7 @@ import { useAppSelector } from '../../app/hooks';
 import { curriculumKeys, fetchPathTree } from '../curriculum/api';
 import { fetchProgressMap, progressKeys } from '../progress/api';
 import { fetchStats, gamificationKeys } from '../gamification/api';
+import { RevisionPanel } from '../adaptive/RevisionPanel';
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -136,6 +137,7 @@ export function DashboardPage() {
 
         <Stack spacing={3} sx={{ flex: 1 }}>
           <StatsCard />
+          <RevisionPanel variant="full" />
           <Card>
             <CardContent>
               <Typography variant="h3" component="h2" gutterBottom>

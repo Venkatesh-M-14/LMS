@@ -56,6 +56,7 @@ export class AttemptFinalizer {
     if (this.deps.events) {
       await this.deps.events.emit('AttemptGraded', {
         userId: attempt.userId,
+        attemptId,
         assessmentId: assessment.id,
         lessonId: assessment.lessonId,
         passed,

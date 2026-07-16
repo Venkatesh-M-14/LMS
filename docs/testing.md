@@ -6,7 +6,7 @@
 | -------------- | ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | API use-cases  | Jest                           | `apps/api/src/**/__tests__` | Business rules against in-memory fakes of the ports — registration conflicts, credential checks, rotation, reuse detection, grace-window behaviour, logout idempotency. No DB, no network, sub-second. |
 | Web components | Vitest + React Testing Library | `apps/web/src/**/__tests__` | User-visible behaviour of components (form validation, API error surfacing, success callbacks) with the API module mocked.                                                                             |
-| End-to-end     | Playwright                     | `e2e/tests`                 | The real stack (Vite ⇄ Express ⇄ Postgres/Redis): register → dashboard → reload (silent refresh) → logout → login, wrong-credential errors, password policy.                                           |
+| End-to-end     | Playwright                     | `e2e/tests`                 | The real stack (Vite ⇄ Express ⇄ Postgres/Redis): register → dashboard → reload (silent refresh) → logout → login, wrong-credential errors, password policy. M8 adds fail-a-quiz → revision assigned → review lesson → cleared, and a lesson-mentor streaming reply — both against the fake provider (`MENTOR_PROVIDER=fake`, no key). |
 
 ## Principles
 

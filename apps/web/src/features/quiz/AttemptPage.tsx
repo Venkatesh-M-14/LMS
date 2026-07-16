@@ -75,6 +75,8 @@ function QuizTaker({ attempt }: { attempt: AttemptInProgress }) {
         queryClient.invalidateQueries({ queryKey: ['progress'] }),
         queryClient.invalidateQueries({ queryKey: ['quiz', 'summary'] }),
         queryClient.invalidateQueries({ queryKey: ['gamification'] }),
+        // A fail may have assigned adaptive revisions that gate the retake.
+        queryClient.invalidateQueries({ queryKey: ['adaptive'] }),
       ]);
     },
   });

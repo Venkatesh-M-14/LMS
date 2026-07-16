@@ -32,20 +32,23 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  refreshTokens      RefreshToken[]
-  authoredVersions   LessonVersion[]     @relation("AuthoredVersions")
-  reviewedVersions   LessonVersion[]     @relation("ReviewedVersions")
-  attempts           Attempt[]
-  itemSubmissions    ItemSubmission[]
-  enrollments        Enrollment[]
-  progressRecords    ProgressRecord[]
-  projectSubmissions ProjectSubmission[]
-  reviewedProjects   ProjectSubmission[] @relation("ProjectReviewer")
-  submissionMessages SubmissionMessage[]
-  xpTransactions     XpTransaction[]
-  stats              UserStats?
-  achievements       UserAchievement[]
-  certificates       Certificate[]
+  refreshTokens       RefreshToken[]
+  authoredVersions    LessonVersion[]      @relation("AuthoredVersions")
+  reviewedVersions    LessonVersion[]      @relation("ReviewedVersions")
+  attempts            Attempt[]
+  itemSubmissions     ItemSubmission[]
+  enrollments         Enrollment[]
+  progressRecords     ProgressRecord[]
+  projectSubmissions  ProjectSubmission[]
+  reviewedProjects    ProjectSubmission[]  @relation("ProjectReviewer")
+  submissionMessages  SubmissionMessage[]
+  xpTransactions      XpTransaction[]
+  stats               UserStats?
+  achievements        UserAchievement[]
+  certificates        Certificate[]
+  mentorConversations MentorConversation[]
+  mentorUsage         MentorUsage[]
+  revisionAssignments RevisionAssignment[]
 
   @@map("users")
 }
@@ -162,11 +165,13 @@ model Lesson {
   currentPublishedVersionId String?        @unique
   currentPublishedVersion   LessonVersion? @relation("CurrentPublished", fields: [currentPublishedVersionId], references: [id])
 
-  versions   LessonVersion[]
-  skills     LessonSkill[]
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  assessment Assessment?
+  versions            LessonVersion[]
+  skills              LessonSkill[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assessment          Assessment?
+  mentorConversations MentorConversation[]
+  revisionTargets     RevisionAssignment[] @relation("RevisionTarget")
 
   @@unique([topicId, slug])
   @@unique([topicId, order])
@@ -226,6 +231,7 @@ model Skill {
 
   lessons              LessonSkill[]
   assessmentItemSkills AssessmentItemSkill[]
+  revisionAssignments  RevisionAssignment[]
 
   @@map("skills")
 }
@@ -281,8 +287,9 @@ model Assessment {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  items    AssessmentItem[]
-  attempts Attempt[]
+  items               AssessmentItem[]
+  attempts            Attempt[]
+  revisionAssignments RevisionAssignment[]
 
   @@map("assessments")
 }
@@ -704,4 +711,87 @@ model Certificate {
 
   @@unique([userId, scope, scopeId])
   @@map("certificates")
+}
+
+// ─── AI Mentor & adaptive learning ───────────────────────────────────────────
+// The mentor streams via the Claude API. Conversations persist; MentorUsage
+// enforces a per-user, per-day token budget. Grounding pulls only PUBLISHED
+// lesson content — never assessment answer keys, hidden tests, or solutions.
+
+enum MentorRole {
+  USER
+  ASSISTANT
+}
+
+model MentorConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("New conversation")
+  /// Optional lesson the conversation is anchored to (for grounding).
+  lessonId  String?
+  lesson    Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages MentorMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("mentor_conversations")
+}
+
+model MentorMessage {
+  id             String             @id @default(cuid())
+  conversationId String
+  conversation   MentorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           MentorRole
+  content        String
+  inputTokens    Int                @default(0)
+  outputTokens   Int                @default(0)
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("mentor_messages")
+}
+
+/// One row per user per local day; enforces the daily token budget.
+model MentorUsage {
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// YYYY-MM-DD in the user's timezone.
+  day      String
+  tokens   Int    @default(0)
+  messages Int    @default(0)
+
+  @@id([userId, day])
+  @@map("mentor_usage")
+}
+
+enum RevisionStatus {
+  ASSIGNED
+  COMPLETED
+}
+
+/// Adaptive learning: a failed attempt maps weak skills to remedial lessons.
+/// An open (ASSIGNED) row with blocksRetake gates the retake of its assessment.
+model RevisionAssignment {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessmentId   String
+  assessment     Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  skillId        String
+  skill          Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  targetLessonId String
+  targetLesson   Lesson         @relation("RevisionTarget", fields: [targetLessonId], references: [id], onDelete: Cascade)
+  status         RevisionStatus @default(ASSIGNED)
+  blocksRetake   Boolean        @default(true)
+  reason         String         @default("")
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+
+  /// At most one open assignment per (user, assessment, skill).
+  @@unique([userId, assessmentId, skillId])
+  @@index([userId, status])
+  @@map("revision_assignments")
 }

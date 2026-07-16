@@ -8,3 +8,4 @@ export * from './assessments/schemas';
 export * from './progress/schemas';
 export * from './projects/schemas';
 export * from './gamification/schemas';
+export * from './mentor/schemas';

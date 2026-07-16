@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link as RouterLink } from 'react-router';
 import Alert from '@mui/material/Alert';
@@ -22,6 +23,9 @@ import { BlockRenderer } from './components/BlockRenderer';
 import { QuizCard } from '../quiz/components/QuizCard';
 import { fetchQuizSummary, quizKeys } from '../quiz/api';
 import { fetchProgressMap, markLessonComplete, progressKeys } from '../progress/api';
+import { RevisionPanel } from '../adaptive/RevisionPanel';
+import { adaptiveKeys } from '../adaptive/api';
+import { LessonMentorDrawer } from '../mentor/LessonMentorDrawer';
 
 export function LessonPage() {
   const { t } = useTranslation();
@@ -36,6 +40,10 @@ export function LessonPage() {
     queryFn: () => fetchLessonRead(lessonId),
     enabled: lessonId.length > 0,
     retry: false,
+    // Each visit must register server-side (marks the lesson opened, which
+    // completes any revision assignment targeting it) — so never serve a cache
+    // hit without re-fetching.
+    refetchOnMount: 'always',
   });
   const { data: progress } = useQuery({ queryKey: progressKeys.map, queryFn: fetchProgressMap });
   const { data: quizSummary } = useQuery({
@@ -48,6 +56,15 @@ export function LessonPage() {
     mutationFn: () => markLessonComplete(lessonId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: progressKeys.map }),
   });
+
+  // Opening a lesson clears any revision assignments that target it (server-side),
+  // which may unblock a gated retake — refresh both once the lesson has loaded.
+  useEffect(() => {
+    if (!lesson) return;
+    void queryClient.invalidateQueries({ queryKey: adaptiveKeys.revisions });
+    void queryClient.invalidateQueries({ queryKey: quizKeys.summary(lessonId) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson?.lessonId]);
 
   if (isPending) {
     return (
@@ -123,6 +140,10 @@ export function LessonPage() {
       </Stack>
       <Divider sx={{ mb: 4 }} />
 
+      <Box sx={{ mb: 4 }}>
+        <RevisionPanel variant="compact" />
+      </Box>
+
       <BlockRenderer blocks={lesson.blocks} />
 
       <QuizCard lessonId={lesson.lessonId} />
@@ -157,6 +178,8 @@ export function LessonPage() {
           </Button>
         </Stack>
       ) : null}
+
+      <LessonMentorDrawer lessonId={lesson.lessonId} lessonTitle={lesson.title} />
     </Box>
   );
 }
