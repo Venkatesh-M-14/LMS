@@ -7,6 +7,7 @@ import { queryClient } from './queryClient';
 import { router } from './router';
 import { AppThemeProvider } from './AppThemeProvider';
 import { RootErrorBoundary } from '../shared/components/RootErrorBoundary';
+import { PwaPrompts } from '../shared/pwa/PwaPrompts';
 
 export function App() {
   return (
@@ -16,6 +17,7 @@ export function App() {
           <AppThemeProvider>
             <CssBaseline enableColorScheme />
             <RouterProvider router={router} />
+            <PwaPrompts />
           </AppThemeProvider>
         </QueryClientProvider>
       </ReduxProvider>

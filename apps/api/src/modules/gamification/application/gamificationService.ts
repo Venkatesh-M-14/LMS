@@ -8,6 +8,7 @@ import {
   type UserStatsView,
 } from '@academy/shared';
 import type { Clock } from '../../auth/application/ports';
+import type { EventBus } from '../../../core/events/eventBus';
 import type { Logger } from '../../../core/logging/logger';
 import { earnedSlugs, ACHIEVEMENT_RULES } from '../domain/achievements';
 import { localDate } from '../domain/streak';
@@ -25,6 +26,7 @@ export interface GamificationServiceDeps {
   repo: GamificationRepository;
   leaderboard: Leaderboard;
   clock: Clock;
+  events?: EventBus;
   logger?: Logger;
 }
 
@@ -135,6 +137,14 @@ export class GamificationService {
           refId: slug,
         });
       }
+      if (rule) {
+        await this.deps.events?.emit('AchievementUnlocked', {
+          userId,
+          slug,
+          title: rule.title,
+          xpReward: rule.xpReward,
+        });
+      }
     }
   }
 
@@ -215,15 +225,25 @@ export class GamificationService {
     scopeTitle: string,
   ): Promise<void> {
     const serial = `FEA-${scope[0]}-${randomBytes(4).toString('hex').toUpperCase()}`;
+    const verificationCode = randomUUID();
     const issued = await this.deps.repo.issueCertificate({
       userId,
       scope,
       scopeId,
       scopeTitle,
       serial,
-      verificationCode: randomUUID(),
+      verificationCode,
     });
-    if (issued) this.deps.logger?.info({ userId, scope, scopeId }, 'Certificate issued');
+    if (issued) {
+      this.deps.logger?.info({ userId, scope, scopeId }, 'Certificate issued');
+      await this.deps.events?.emit('CertificateIssued', {
+        userId,
+        certificateId: issued.id,
+        scope,
+        scopeTitle,
+        verificationCode,
+      });
+    }
   }
 
   listCertificates(userId: string): Promise<CertificateSummary[]> {

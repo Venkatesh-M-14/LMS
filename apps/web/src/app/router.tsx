@@ -21,6 +21,7 @@ import { LeaderboardPage } from '../features/gamification/LeaderboardPage';
 import { AchievementsPage } from '../features/gamification/AchievementsPage';
 import { CertificatesPage } from '../features/gamification/CertificatesPage';
 import { MentorPage } from '../features/mentor/MentorPage';
+import { AnalyticsDashboardPage } from '../features/analytics/AnalyticsDashboardPage';
 import { VerifyCertificatePage } from '../features/gamification/VerifyCertificatePage';
 import { NotFoundPage } from '../shared/components/NotFoundPage';
 
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
                     path: '/instructor/lessons/:lessonId/assessment',
                     element: <AssessmentEditorPage />,
                   },
+                  { path: '/instructor/analytics', element: <AnalyticsDashboardPage /> },
                   { path: '/instructor/grading', element: <GradingQueuePage /> },
                   { path: '/instructor/projects', element: <ProjectQueuePage /> },
                   { path: '/instructor/projects/:submissionId', element: <ProjectReviewPage /> },

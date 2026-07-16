@@ -32,7 +32,7 @@ test('coding item: client test run → submit → judge grades → passed', asyn
     .getByRole('navigation')
     .getByRole('link', { name: /curriculum/i })
     .click();
-  await page.getByText('Thinking in Algorithms').click();
+  await page.getByRole('link', { name: 'Thinking in Algorithms' }).click();
   await page
     .getByTestId('quiz-card')
     .getByRole('button', { name: /start quiz|retake quiz|resume attempt/i })
@@ -84,7 +84,7 @@ test('coding item: wrong code fails the hidden tests and the judge says so', asy
     .getByRole('navigation')
     .getByRole('link', { name: /curriculum/i })
     .click();
-  await page.getByText('From Source Code to Execution').click();
+  await page.getByRole('link', { name: 'From Source Code to Execution' }).click();
   await page
     .getByTestId('quiz-card')
     .getByRole('button', { name: /start quiz|retake quiz|resume attempt/i })

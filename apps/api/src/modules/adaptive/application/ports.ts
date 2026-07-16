@@ -7,6 +7,8 @@ export interface AttemptGradedFacts {
   /** The lesson the failed assessment belongs to — always accessible to the
    * learner (they took its quiz), so it's the natural remediation target. */
   lessonId: string | null;
+  /** Title of that lesson, for notification copy. */
+  lessonTitle: string | null;
   passed: boolean;
   items: GradedItem[];
 }
@@ -18,14 +20,15 @@ export interface AdaptiveRepository {
   /** A published lesson that teaches the skill (for remediation), or null. */
   findLessonForSkill(skillId: string): Promise<{ lessonId: string; title: string } | null>;
 
-  /** Idempotently create an ASSIGNED assignment (unique per user/assessment/skill). */
+  /** Idempotently create an ASSIGNED assignment (unique per user/assessment/skill).
+   * Returns true when a new row was created, false when one already existed. */
   createAssignment(input: {
     userId: string;
     assessmentId: string;
     skillId: string;
     targetLessonId: string;
     reason: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
 
   /** Open (ASSIGNED) blocking assignments for a user's assessment. */
   listOpenBlocking(

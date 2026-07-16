@@ -53,6 +53,8 @@ export function createApp(container: Container): Express {
   app.use('/api/v1/gamification', routers.gamification);
   app.use('/api/v1/mentor', routers.mentor);
   app.use('/api/v1/adaptive', routers.adaptive);
+  app.use('/api/v1/notifications', routers.notifications);
+  app.use('/api/v1/analytics', routers.analytics);
   // Public: certificate verification needs no auth (shareable link).
   app.use('/api/v1/verify', routers.certificateVerify);
 

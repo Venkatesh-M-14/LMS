@@ -1,11 +1,13 @@
 import { ErrorCodes, type RevisionAssignmentView } from '@academy/shared';
 import { AppError } from '../../../core/errors/appError';
+import type { EventBus } from '../../../core/events/eventBus';
 import type { Logger } from '../../../core/logging/logger';
 import { detectWeakSkills } from '../domain/weakness';
 import type { AdaptiveRepository } from './ports';
 
 export interface AdaptiveServiceDeps {
   repo: AdaptiveRepository;
+  events?: EventBus;
   logger?: Logger;
 }
 
@@ -23,27 +25,40 @@ export class AdaptiveService {
     if (!facts || facts.passed) return;
 
     const weakSkills = detectWeakSkills(facts.items);
+    let created = 0;
+    let primaryTarget: { lessonId: string; title: string } | null = null;
     for (const skillId of weakSkills) {
       // Prefer re-reading the lesson they just failed (always accessible);
       // fall back to any published lesson teaching the skill.
       const target =
         facts.lessonId !== null
-          ? { lessonId: facts.lessonId }
+          ? { lessonId: facts.lessonId, title: facts.lessonTitle ?? 'the lesson' }
           : await this.deps.repo.findLessonForSkill(skillId);
       if (!target) continue;
-      await this.deps.repo.createAssignment({
+      const isNew = await this.deps.repo.createAssignment({
         userId: facts.userId,
         assessmentId: facts.assessmentId,
         skillId,
         targetLessonId: target.lessonId,
         reason: 'Assigned after a missed question on this skill.',
       });
+      if (isNew) {
+        created += 1;
+        primaryTarget ??= target;
+      }
     }
-    if (weakSkills.length > 0) {
+    if (created > 0 && primaryTarget) {
       this.deps.logger?.info(
-        { userId: facts.userId, assessmentId: facts.assessmentId, skills: weakSkills.length },
+        { userId: facts.userId, assessmentId: facts.assessmentId, skills: created },
         'Revision assigned',
       );
+      await this.deps.events?.emit('RevisionAssigned', {
+        userId: facts.userId,
+        assessmentId: facts.assessmentId,
+        count: created,
+        targetLessonId: primaryTarget.lessonId,
+        targetLessonTitle: primaryTarget.title,
+      });
     }
   }
 

@@ -9,3 +9,5 @@ export * from './progress/schemas';
 export * from './projects/schemas';
 export * from './gamification/schemas';
 export * from './mentor/schemas';
+export * from './notifications/schemas';
+export * from './analytics/schemas';

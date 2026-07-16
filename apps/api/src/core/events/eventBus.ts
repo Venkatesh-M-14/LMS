@@ -29,6 +29,42 @@ export interface DomainEvents {
     userId: string;
     lessonId: string;
   };
+  /** A new account was created — drives the welcome email (M9). */
+  UserRegistered: {
+    userId: string;
+    email: string;
+    displayName: string;
+  };
+  /** An achievement was newly granted — drives an in-app notification (M9). */
+  AchievementUnlocked: {
+    userId: string;
+    slug: string;
+    title: string;
+    xpReward: number;
+  };
+  /** A certificate was newly issued — drives a notification + email (M9). */
+  CertificateIssued: {
+    userId: string;
+    certificateId: string;
+    scope: 'MODULE' | 'PATH';
+    scopeTitle: string;
+    verificationCode: string;
+  };
+  /** A project submission was reviewed — drives a notification + email (M9). */
+  ProjectReviewed: {
+    userId: string;
+    submissionId: string;
+    briefTitle: string;
+    decision: 'APPROVED' | 'CHANGES_REQUESTED';
+  };
+  /** Adaptive revisions were assigned after a failed attempt (M9 notification). */
+  RevisionAssigned: {
+    userId: string;
+    assessmentId: string;
+    count: number;
+    targetLessonId: string;
+    targetLessonTitle: string;
+  };
 }
 
 type Handler<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => Promise<void> | void;

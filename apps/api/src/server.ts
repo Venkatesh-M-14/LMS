@@ -5,6 +5,7 @@ import { buildContainer } from './container';
 import { createApp } from './app';
 import { createSocketServer } from './core/realtime/socket';
 import { startJudgeWorker } from './modules/judge/infrastructure/judgeQueue';
+import { startEmailWorker } from './modules/email/infrastructure/emailQueue';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -22,6 +23,16 @@ async function main(): Promise<void> {
       scorePct: event.scorePct,
     });
   });
+  // Notifications: push each new one to the owner's room for a live badge.
+  container.notificationService.setPusher({
+    push: (userId, payload) => io.to(`user:${userId}`).emit('notification:new', payload),
+  });
+
+  // Email outbox drain worker; recover any rows stranded before this boot.
+  const emailWorker = startEmailWorker(env.REDIS_URL, container.emailService, container.logger);
+  void container.emailService
+    .resumePending()
+    .catch((err) => container.logger.error({ err }, 'Email resume failed'));
 
   // Judge worker (in-process for now; same code can run standalone later).
   const judgeWorker = startJudgeWorker(
@@ -42,8 +53,7 @@ async function main(): Promise<void> {
     container.logger.info({ signal }, 'Shutting down');
     io.close();
     server.close(() => {
-      judgeWorker
-        .close()
+      Promise.all([judgeWorker.close(), emailWorker.close()])
         .then(() => container.shutdown())
         .catch((err) => container.logger.error({ err }, 'Error during shutdown'))
         .finally(() => process.exit(0));

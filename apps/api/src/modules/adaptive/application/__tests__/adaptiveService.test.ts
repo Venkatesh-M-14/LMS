@@ -36,15 +36,16 @@ class FakeRepo implements AdaptiveRepository {
     skillId: string;
     targetLessonId: string;
     reason: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const exists = this.assignments.some(
       (a) =>
         a.userId === input.userId &&
         a.assessmentId === input.assessmentId &&
         a.skillId === input.skillId,
     );
-    if (exists) return; // idempotent: unique (user, assessment, skill)
+    if (exists) return false; // idempotent: unique (user, assessment, skill)
     this.assignments.push({ id: `ra-${this.seq++}`, status: 'ASSIGNED', ...input });
+    return true;
   }
 
   async listOpenBlocking(userId: string, assessmentId: string) {
@@ -89,6 +90,7 @@ const facts = (partial: Partial<AttemptGradedFacts>): AttemptGradedFacts => ({
   userId: 'u1',
   assessmentId: 'as1',
   lessonId: 'lesson-1',
+  lessonTitle: 'How a Computer Works',
   passed: false,
   items: [],
   ...partial,

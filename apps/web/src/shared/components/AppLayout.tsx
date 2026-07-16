@@ -26,6 +26,8 @@ import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import Divider from '@mui/material/Divider';
 import { useTranslation } from 'react-i18next';
 import { StatsBadge } from '../../features/gamification/components/StatsBadge';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { usePageViews } from '../analytics/usePageViews';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { themeModeChanged, type ThemeMode } from '../../app/uiSlice';
 import { loggedOut } from '../../features/auth/authSlice';
@@ -46,6 +48,7 @@ const THEME_OPTIONS: Array<{ mode: ThemeMode; labelKey: string; icon: ReactEleme
 
 export function AppLayout() {
   useRealtime();
+  usePageViews();
   const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -125,11 +128,20 @@ export function AppLayout() {
                 >
                   {t('nav.projects')}
                 </Button>
+                <Button
+                  component={RouterLink}
+                  to="/instructor/analytics"
+                  color="inherit"
+                  size="small"
+                >
+                  {t('nav.analytics')}
+                </Button>
               </>
             ) : null}
           </Box>
 
           <StatsBadge />
+          <NotificationBell />
 
           <Tooltip title={t('nav.theme')}>
             <IconButton aria-label={t('nav.theme')} onClick={openMenu(setThemeAnchor)}>

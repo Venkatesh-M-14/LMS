@@ -32,6 +32,14 @@ const envSchema = z.object({
   /** 'anthropic' (real API) or 'fake' (deterministic, for dev/CI). */
   MENTOR_PROVIDER: z.enum(['anthropic', 'fake']).default('anthropic'),
   MENTOR_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(50_000),
+  // Email outbox (M9). With no SMTP_HOST the drain worker no-ops and marks
+  // messages SENT (dev without mailpit) — the app never blocks on mail.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('Frontend Academy <no-reply@academy.local>'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

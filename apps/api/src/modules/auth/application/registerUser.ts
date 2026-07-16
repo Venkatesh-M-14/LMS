@@ -1,11 +1,13 @@
 import { ErrorCodes, type RegisterRequest } from '@academy/shared';
 import { ConflictError } from '../../../core/errors/appError';
+import type { EventBus } from '../../../core/events/eventBus';
 import type { PasswordHasher, UserRepository } from './ports';
 import { startSession, type AuthSessionResult, type SessionDeps } from './authSession';
 
 export interface RegisterUserDeps extends SessionDeps {
   users: UserRepository;
   passwordHasher: PasswordHasher;
+  events?: EventBus;
 }
 
 export class RegisterUser {
@@ -28,6 +30,12 @@ export class RegisterUser {
       email: input.email,
       passwordHash,
       displayName: input.displayName,
+    });
+
+    await this.deps.events?.emit('UserRegistered', {
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
     });
 
     return startSession(this.deps, user, meta);

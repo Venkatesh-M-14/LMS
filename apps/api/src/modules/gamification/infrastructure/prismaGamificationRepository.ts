@@ -261,13 +261,13 @@ export class PrismaGamificationRepository implements GamificationRepository {
     scopeTitle: string;
     serial: string;
     verificationCode: string;
-  }): Promise<boolean> {
+  }): Promise<{ id: string } | null> {
     try {
-      await this.prisma.certificate.create({ data: input });
-      return true;
+      const created = await this.prisma.certificate.create({ data: input, select: { id: true } });
+      return created;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return false; // already issued
+        return null; // already issued
       }
       throw error;
     }

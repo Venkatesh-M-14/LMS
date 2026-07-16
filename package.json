@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "playwright test",
+    "load": "node scripts/load/run.mjs",
     "db:migrate": "pnpm --filter @academy/api db:migrate",
     "db:migrate:deploy": "pnpm --filter @academy/api db:migrate:deploy",
     "db:generate": "pnpm --filter @academy/api db:generate",
@@ -22,7 +23,10 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\""
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.53.0",
+    "autocannon": "^8.0.0",
+    "axe-core": "^4.12.1",
     "prettier": "^3.6.0",
     "turbo": "^2.5.0"
   },

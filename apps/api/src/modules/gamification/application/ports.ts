@@ -65,6 +65,7 @@ export interface GamificationRepository {
   getPathCertificateStatus(
     userId: string,
   ): Promise<{ pathId: string; title: string; complete: boolean; hasCertificate: boolean } | null>;
+  /** Creates the certificate, or returns null if one already exists (idempotent). */
   issueCertificate(input: {
     userId: string;
     scope: 'MODULE' | 'PATH';
@@ -72,7 +73,7 @@ export interface GamificationRepository {
     scopeTitle: string;
     serial: string;
     verificationCode: string;
-  }): Promise<boolean>;
+  }): Promise<{ id: string } | null>;
   listCertificates(userId: string): Promise<CertificateSummary[]>;
   verifyCertificate(code: string): Promise<CertificateVerification>;
 }

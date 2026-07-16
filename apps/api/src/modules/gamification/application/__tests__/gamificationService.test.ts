@@ -154,10 +154,10 @@ class FakeRepo implements GamificationRepository {
         (c) => c.userId === input.userId && c.scope === input.scope && c.scopeId === input.scopeId,
       )
     ) {
-      return false;
+      return null;
     }
     this.certificates.push({ ...input, code: input.verificationCode });
-    return true;
+    return { id: `cert-${this.certificates.length}` };
   }
   async listCertificates(): Promise<CertificateSummary[]> {
     return [];

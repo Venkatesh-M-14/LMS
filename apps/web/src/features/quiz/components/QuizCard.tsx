@@ -14,6 +14,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 import { ApiClientError } from '../../../shared/api/client';
+import { track } from '../../../shared/analytics/analytics';
 import { fetchQuizSummary, quizKeys, startAttempt } from '../api';
 
 /** The quiz entry point shown at the bottom of a lesson. */
@@ -27,7 +28,10 @@ export function QuizCard({ lessonId }: { lessonId: string }) {
 
   const startMutation = useMutation({
     mutationFn: () => startAttempt(summary!.id),
-    onSuccess: (attempt) => navigate(`/attempts/${attempt.id}`),
+    onSuccess: (attempt) => {
+      track('quiz.started', { assessmentId: summary!.id, lessonId });
+      navigate(`/attempts/${attempt.id}`);
+    },
   });
 
   if (!summary) return null;

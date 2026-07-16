@@ -11,7 +11,10 @@ export class PrismaAdaptiveRepository implements AdaptiveRepository {
   async getAttemptGradedFacts(attemptId: string): Promise<AttemptGradedFacts | null> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      include: { submissions: true, assessment: { select: { lessonId: true } } },
+      include: {
+        submissions: true,
+        assessment: { select: { lessonId: true, lesson: { select: { title: true } } } },
+      },
     });
     if (!attempt) return null;
 
@@ -47,6 +50,7 @@ export class PrismaAdaptiveRepository implements AdaptiveRepository {
       userId: attempt.userId,
       assessmentId: attempt.assessmentId,
       lessonId: attempt.assessment.lessonId,
+      lessonTitle: attempt.assessment.lesson?.title ?? null,
       passed: attempt.passed ?? false,
       items,
     };
@@ -81,12 +85,15 @@ export class PrismaAdaptiveRepository implements AdaptiveRepository {
     skillId: string;
     targetLessonId: string;
     reason: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
     try {
       await this.prisma.revisionAssignment.create({ data: input });
+      return true;
     } catch (error) {
       // Unique (user, assessment, skill): an open assignment already exists.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return false;
+      }
       throw error;
     }
   }

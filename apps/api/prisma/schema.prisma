@@ -49,6 +49,9 @@ model User {
   mentorConversations MentorConversation[]
   mentorUsage         MentorUsage[]
   revisionAssignments RevisionAssignment[]
+  notifications       Notification[]
+  emailMessages       EmailOutbox[]
+  analyticsEvents     AnalyticsEvent[]
 
   @@map("users")
 }
@@ -794,4 +797,85 @@ model RevisionAssignment {
   @@unique([userId, assessmentId, skillId])
   @@index([userId, status])
   @@map("revision_assignments")
+}
+
+// ─── Notifications, email outbox & analytics (M9) ────────────────────────────
+
+enum NotificationType {
+  QUIZ_PASSED
+  QUIZ_FAILED
+  ACHIEVEMENT_EARNED
+  CERTIFICATE_ISSUED
+  PROJECT_REVIEWED
+  REVISION_ASSIGNED
+  LESSON_UNLOCKED
+}
+
+/// In-app notification. Created by event subscribers; pushed live over
+/// Socket.IO to the user's room and listed in the notification center.
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  /// Optional in-app deep link, e.g. /lessons/:id or /achievements.
+  linkUrl   String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Transactional outbox: an intent row is written alongside the triggering
+/// change and drained by a BullMQ worker (SMTP send). Mail is never sent
+/// inside a request; a crash leaves a recoverable PENDING row, never a lost
+/// or double-sent message.
+model EmailOutbox {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  toEmail   String
+  subject   String
+  /// Template id the worker renders (welcome, certificate-issued, …).
+  template  String
+  /// JSON the template renders from.
+  payload   Json
+  status    EmailStatus @default(PENDING)
+  attempts  Int         @default(0)
+  lastError String?
+  createdAt DateTime    @default(now())
+  sentAt    DateTime?
+
+  @@index([status, createdAt])
+  @@map("email_outbox")
+}
+
+/// Append-only analytics stream. Batch-inserted from client + server; read
+/// only through aggregation. occurredAt carries a BRIN index (added in the
+/// migration) — cheap for an ever-growing, time-ordered table.
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Dot-namespaced name, e.g. "lesson.opened", "quiz.submitted".
+  name       String
+  /// Free-form JSON properties (lessonId, assessmentId, scorePct, …).
+  props      Json?
+  /// Anonymous client session correlation.
+  sessionId  String?
+  occurredAt DateTime @default(now())
+
+  @@index([name, occurredAt])
+  @@map("analytics_events")
 }

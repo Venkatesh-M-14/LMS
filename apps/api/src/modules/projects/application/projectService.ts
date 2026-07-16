@@ -150,6 +150,13 @@ export class ProjectService {
     assertCanRequestChanges(row.status);
     await this.deps.repo.addMessage(submissionId, actor.id, message);
     await this.deps.repo.requestChanges(submissionId, actor.id, this.deps.clock.now());
+    const brief = await this.deps.repo.getBriefById(row.briefId);
+    await this.deps.events?.emit('ProjectReviewed', {
+      userId: row.userId,
+      submissionId,
+      briefTitle: brief?.title ?? 'your project',
+      decision: 'CHANGES_REQUESTED',
+    });
   }
 
   async approve(actor: Actor, submissionId: string, request: ApproveProjectRequest): Promise<void> {
@@ -175,6 +182,12 @@ export class ProjectService {
         userId: row.userId,
         briefId: row.briefId,
         topicId: row.topicId,
+      });
+      await this.deps.events.emit('ProjectReviewed', {
+        userId: row.userId,
+        submissionId,
+        briefTitle: brief.title,
+        decision: 'APPROVED',
       });
     }
   }

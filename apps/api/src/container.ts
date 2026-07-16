@@ -60,6 +60,16 @@ import type { LlmProvider } from './modules/mentor/application/llmProvider';
 import { AdaptiveService } from './modules/adaptive/application/adaptiveService';
 import { PrismaAdaptiveRepository } from './modules/adaptive/infrastructure/prismaAdaptiveRepository';
 import { buildAdaptiveRouter } from './modules/adaptive/http/adaptiveRouter';
+import { NotificationService } from './modules/notifications/application/notificationService';
+import { PrismaNotificationRepository } from './modules/notifications/infrastructure/prismaNotificationRepository';
+import { buildNotificationRouter } from './modules/notifications/http/notificationRouter';
+import { EmailService } from './modules/email/application/emailService';
+import { PrismaEmailRepository } from './modules/email/infrastructure/prismaEmailRepository';
+import { NodemailerSender } from './modules/email/infrastructure/nodemailerSender';
+import { BullEmailQueue } from './modules/email/infrastructure/emailQueue';
+import { AnalyticsService } from './modules/analytics/application/analyticsService';
+import { PrismaAnalyticsRepository } from './modules/analytics/infrastructure/prismaAnalyticsRepository';
+import { buildAnalyticsRouter } from './modules/analytics/http/analyticsRouter';
 import { ProjectService } from './modules/projects/application/projectService';
 import { PrismaProjectRepository } from './modules/projects/infrastructure/prismaProjectRepository';
 import {
@@ -88,11 +98,15 @@ export interface Container {
     certificateVerify: Router;
     mentor: Router;
     adaptive: Router;
+    notifications: Router;
+    analytics: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   eventBus: EventBus;
   judgeService: JudgeService;
   judgeQueue: BullJudgeQueue;
+  notificationService: NotificationService;
+  emailService: EmailService;
   tokenVerifier: JwtTokenServiceType;
   shutdown(): Promise<void>;
 }
@@ -107,6 +121,9 @@ export async function buildContainer(env: Env): Promise<Container> {
   const prisma = createPrismaClient(env.DATABASE_URL);
   const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 2 });
   redis.on('error', (err) => logger.error({ err }, 'Redis connection error'));
+
+  // The typed in-process bus: the one channel for cross-module effects.
+  const eventBus = new EventBus(logger);
 
   const clock = { now: () => new Date() };
   const tokens = new CryptoTokenGenerator();
@@ -131,7 +148,7 @@ export async function buildContainer(env: Env): Promise<Container> {
   // Hashed at boot so login timing is identical for unknown emails.
   const dummyPasswordHash = await passwordHasher.hash(randomBytes(32).toString('hex'));
 
-  const registerUser = new RegisterUser({ ...sessionDeps, users, passwordHasher });
+  const registerUser = new RegisterUser({ ...sessionDeps, users, passwordHasher, events: eventBus });
   const loginUser = new LoginUser({ ...sessionDeps, users, passwordHasher, dummyPasswordHash });
   const refreshSession = new RefreshSession({
     ...sessionDeps,
@@ -144,9 +161,9 @@ export async function buildContainer(env: Env): Promise<Container> {
   const authoring = new LessonAuthoringService(new PrismaAuthoringRepository(prisma));
   const curriculum = new CurriculumQueryService(prisma);
 
-  const eventBus = new EventBus(logger);
   const adaptiveService = new AdaptiveService({
     repo: new PrismaAdaptiveRepository(prisma),
+    events: eventBus,
     logger,
   });
   const progressService = new ProgressService(new PrismaProgressRepository(prisma), eventBus);
@@ -159,11 +176,54 @@ export async function buildContainer(env: Env): Promise<Container> {
     repo: new PrismaGamificationRepository(prisma),
     leaderboard: new RedisLeaderboard(redis),
     clock,
+    events: eventBus,
     logger,
   });
   eventBus.on('AttemptGraded', (event) => gamificationService.onAttemptGraded(event));
   eventBus.on('ProjectApproved', (event) => gamificationService.onProjectApproved(event));
   eventBus.on('LessonCompleted', (event) => gamificationService.onLessonCompleted(event));
+
+  // Notifications: in-app center, live-pushed over Socket.IO (server.ts wires
+  // the pusher). Subscribes across the domain events users care about.
+  const notificationService = new NotificationService({
+    repo: new PrismaNotificationRepository(prisma),
+    logger,
+  });
+  eventBus.on('AttemptGraded', (event) => notificationService.onAttemptGraded(event));
+  eventBus.on('AchievementUnlocked', (event) => notificationService.onAchievementUnlocked(event));
+  eventBus.on('CertificateIssued', (event) => notificationService.onCertificateIssued(event));
+  eventBus.on('ProjectReviewed', (event) => notificationService.onProjectReviewed(event));
+  eventBus.on('RevisionAssigned', (event) => notificationService.onRevisionAssigned(event));
+
+  // Email outbox: subscribers write PENDING rows; a BullMQ worker (server.ts)
+  // drains them. No SMTP configured → the worker no-ops, so nothing blocks.
+  const emailQueue = new BullEmailQueue(env.REDIS_URL);
+  const emailService = new EmailService({
+    repo: new PrismaEmailRepository(prisma),
+    queue: emailQueue,
+    sender: new NodemailerSender({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_SECURE,
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      from: env.EMAIL_FROM,
+    }),
+    webOrigin: env.WEB_ORIGIN,
+    logger,
+  });
+  eventBus.on('UserRegistered', (event) => emailService.onUserRegistered(event));
+  eventBus.on('CertificateIssued', (event) => emailService.onCertificateIssued(event));
+  eventBus.on('ProjectReviewed', (event) => emailService.onProjectReviewed(event));
+
+  // Analytics: append-only stream. Server-side capture of authoritative funnel
+  // events; the client posts the rest to /analytics/events.
+  const analyticsService = new AnalyticsService({
+    repo: new PrismaAnalyticsRepository(prisma),
+    clock,
+    logger,
+  });
+  eventBus.on('AttemptGraded', (event) => analyticsService.onAttemptGraded(event));
 
   // AI Mentor provider: real Anthropic when a key is present, deterministic
   // fake when explicitly selected (dev/CI), else an unconfigured placeholder.
@@ -255,7 +315,10 @@ export async function buildContainer(env: Env): Promise<Container> {
       curriculum: buildCurriculumRouter({
         curriculum,
         gate: progressService,
-        onLessonOpened: (userId, lessonId) => adaptiveService.onLessonOpened(userId, lessonId),
+        onLessonOpened: async (userId, lessonId) => {
+          await adaptiveService.onLessonOpened(userId, lessonId);
+          await analyticsService.recordLessonOpened(userId, lessonId);
+        },
         authenticate,
       }),
       cms: buildCmsRouter({ authoring, authenticate }),
@@ -272,14 +335,19 @@ export async function buildContainer(env: Env): Promise<Container> {
       certificateVerify: buildCertificateVerifyRouter({ gamification: gamificationService }),
       mentor: buildMentorRouter({ mentor: mentorService, authenticate }),
       adaptive: buildAdaptiveRouter({ adaptive: adaptiveService, authenticate }),
+      notifications: buildNotificationRouter({ notifications: notificationService, authenticate }),
+      analytics: buildAnalyticsRouter({ analytics: analyticsService, authenticate }),
     },
     globalRateLimiter,
     eventBus,
     judgeService,
     judgeQueue,
+    notificationService,
+    emailService,
     tokenVerifier: jwtService,
     async shutdown() {
       await judgeQueue.close();
+      await emailQueue.close();
       await prisma.$disconnect();
       redis.disconnect();
     },

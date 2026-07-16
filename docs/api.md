@@ -173,6 +173,24 @@ Grounding uses only currently-published lesson content — never hidden tests, a
 
 Failing a quiz assigns a `RevisionAssignment` per weak (missed skill-tagged) item, targeting the failed lesson. While one is open and blocking, starting a new attempt returns `REVISION_REQUIRED` 409 (its `details` list the lessons to review); opening the target lesson completes the assignment and unblocks the retake.
 
+## Notifications _(Bearer token)_
+
+| Endpoint                   | Purpose                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `GET /notifications`       | `{ items, unreadCount }` — the 50 most recent, newest first                    |
+| `POST /notifications/read` | Mark read: `{ ids }` for specific notifications, or `{}` for all unread; returns `{ unreadCount }` |
+
+New notifications are also pushed live over Socket.IO (`notification:new` → `{ notification, unreadCount }`) to the owner's room.
+
+## Analytics
+
+| Endpoint                                     | Purpose                                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `POST /analytics/events` _(any user)_        | Batch-ingest client events: `{ events: [{ name, props?, sessionId?, occurredAt? }] }` (1–50; dot-namespaced names) |
+| `GET /analytics/dashboard?windowDays=14` _(INSTRUCTOR/ADMIN)_ | Totals, daily timeseries, engagement funnel, and top lessons over the window (1–90 days) |
+
+Server-side capture also records `quiz.submitted`/`quiz.passed` (from grading) and `lesson.opened` (from the lesson read) so the funnel is authoritative regardless of the client.
+
 ## Certificate verification _(public, no auth)_
 
 `GET /verify/:code` → `{ valid, serial, holderName, scope, scopeTitle, issuedAt }`. Returns `{ valid: false, … }` for an unknown code. Backs the shareable `/verify/:code` page.

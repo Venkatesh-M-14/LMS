@@ -30,6 +30,11 @@ export function useRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ['gamification'] });
     });
 
+    // A new notification arrived — refresh the bell's list + unread badge.
+    socket.on('notification:new', () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
     return () => {
       socket?.disconnect();
       socket = null;
