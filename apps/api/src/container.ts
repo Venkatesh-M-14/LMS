@@ -41,6 +41,13 @@ import type { JwtTokenService as JwtTokenServiceType } from './modules/auth/infr
 import { PrismaProgressRepository } from './modules/progress/infrastructure/prismaProgressRepository';
 import { ProgressService } from './modules/progress/application/progressService';
 import { buildProgressRouter } from './modules/progress/http/progressRouter';
+import { GamificationService } from './modules/gamification/application/gamificationService';
+import { PrismaGamificationRepository } from './modules/gamification/infrastructure/prismaGamificationRepository';
+import { RedisLeaderboard } from './modules/gamification/infrastructure/redisLeaderboard';
+import {
+  buildCertificateVerifyRouter,
+  buildGamificationRouter,
+} from './modules/gamification/http/gamificationRouter';
 import { ProjectService } from './modules/projects/application/projectService';
 import { PrismaProjectRepository } from './modules/projects/infrastructure/prismaProjectRepository';
 import {
@@ -65,6 +72,8 @@ export interface Container {
     progress: Router;
     projects: Router;
     cmsProjects: Router;
+    gamification: Router;
+    certificateVerify: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   eventBus: EventBus;
@@ -122,9 +131,20 @@ export async function buildContainer(env: Env): Promise<Container> {
   const curriculum = new CurriculumQueryService(prisma);
 
   const eventBus = new EventBus(logger);
-  const progressService = new ProgressService(new PrismaProgressRepository(prisma));
+  const progressService = new ProgressService(new PrismaProgressRepository(prisma), eventBus);
   // Progress subscribes: a graded, passed quiz completes its lesson (cascade).
   eventBus.on('AttemptGraded', (event) => progressService.onAttemptGraded(event));
+
+  // Gamification subscribes to the same events for XP, achievements, certificates.
+  const gamificationService = new GamificationService({
+    repo: new PrismaGamificationRepository(prisma),
+    leaderboard: new RedisLeaderboard(redis),
+    clock,
+    logger,
+  });
+  eventBus.on('AttemptGraded', (event) => gamificationService.onAttemptGraded(event));
+  eventBus.on('ProjectApproved', (event) => gamificationService.onProjectApproved(event));
+  eventBus.on('LessonCompleted', (event) => gamificationService.onLessonCompleted(event));
 
   const assessmentRepo = new PrismaAssessmentRepository(prisma);
   const attemptRepo = new PrismaAttemptRepository(prisma);
@@ -205,6 +225,8 @@ export async function buildContainer(env: Env): Promise<Container> {
       progress: buildProgressRouter({ progress: progressService, authenticate }),
       projects: buildProjectsRouter({ projects: projectService, authenticate }),
       cmsProjects: buildCmsProjectsRouter({ projects: projectService, authenticate }),
+      gamification: buildGamificationRouter({ gamification: gamificationService, authenticate }),
+      certificateVerify: buildCertificateVerifyRouter({ gamification: gamificationService }),
     },
     globalRateLimiter,
     eventBus,

@@ -23,6 +23,11 @@ export interface DomainEvents {
     briefId: string;
     topicId: string;
   };
+  /** A quizless lesson was manually completed (quiz lessons use AttemptGraded). */
+  LessonCompleted: {
+    userId: string;
+    lessonId: string;
+  };
 }
 
 type Handler<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => Promise<void> | void;

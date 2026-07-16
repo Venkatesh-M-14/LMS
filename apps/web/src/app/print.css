@@ -1,0 +1,15 @@
+/* When printing a certificate, show only the certificate area. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .certificate-print-area,
+  .certificate-print-area * {
+    visibility: visible;
+  }
+  .certificate-print-area {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+}

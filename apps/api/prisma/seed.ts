@@ -7,6 +7,7 @@ import { QUIZZES_SEED } from './seedData/quizzes';
 import { CHALLENGE_ATTACHMENTS, CHALLENGES_SEED } from './seedData/challenges';
 import { PROJECT_BRIEFS_SEED } from './seedData/projects';
 import { generateDefaultRules } from '../src/modules/progress/domain/gating';
+import { seedAchievementDefinitions } from '../src/modules/gamification/infrastructure/prismaGamificationRepository';
 
 /**
  * Development/demo seed. Idempotent: structure rows are upserted by slug;
@@ -410,6 +411,8 @@ async function main(): Promise<void> {
     await seedChallenges(prisma);
     await seedProjectBriefs(prisma);
     await seedPrerequisiteRules(prisma);
+    await seedAchievementDefinitions(prisma);
+    console.warn('Seeded achievement definitions');
   } finally {
     await prisma.$disconnect();
   }

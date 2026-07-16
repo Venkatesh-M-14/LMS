@@ -20,7 +20,12 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import SettingsBrightnessIcon from '@mui/icons-material/SettingsBrightness';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CheckIcon from '@mui/icons-material/Check';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import LeaderboardIcon from '@mui/icons-material/Leaderboard';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import Divider from '@mui/material/Divider';
 import { useTranslation } from 'react-i18next';
+import { StatsBadge } from '../../features/gamification/components/StatsBadge';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { themeModeChanged, type ThemeMode } from '../../app/uiSlice';
 import { loggedOut } from '../../features/auth/authSlice';
@@ -121,6 +126,8 @@ export function AppLayout() {
             ) : null}
           </Box>
 
+          <StatsBadge />
+
           <Tooltip title={t('nav.theme')}>
             <IconButton aria-label={t('nav.theme')} onClick={openMenu(setThemeAnchor)}>
               {activeThemeIcon}
@@ -188,6 +195,25 @@ export function AppLayout() {
             open={Boolean(userAnchor)}
             onClose={() => setUserAnchor(null)}
           >
+            <MenuItem component={RouterLink} to="/achievements" onClick={() => setUserAnchor(null)}>
+              <ListItemIcon>
+                <EmojiEventsIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('nav.achievements')}</ListItemText>
+            </MenuItem>
+            <MenuItem component={RouterLink} to="/leaderboard" onClick={() => setUserAnchor(null)}>
+              <ListItemIcon>
+                <LeaderboardIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('nav.leaderboard')}</ListItemText>
+            </MenuItem>
+            <MenuItem component={RouterLink} to="/certificates" onClick={() => setUserAnchor(null)}>
+              <ListItemIcon>
+                <WorkspacePremiumIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('nav.certificates')}</ListItemText>
+            </MenuItem>
+            <Divider />
             <MenuItem onClick={() => void handleLogout()}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />

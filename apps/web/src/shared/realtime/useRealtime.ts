@@ -27,6 +27,7 @@ export function useRealtime(): void {
     socket.on('attempt:graded', () => {
       void queryClient.invalidateQueries({ queryKey: ['quiz'] });
       void queryClient.invalidateQueries({ queryKey: ['progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
     });
 
     return () => {

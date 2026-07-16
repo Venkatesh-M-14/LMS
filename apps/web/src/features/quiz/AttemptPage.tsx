@@ -69,10 +69,12 @@ function QuizTaker({ attempt }: { attempt: AttemptInProgress }) {
     },
     onSuccess: async (result) => {
       queryClient.setQueryData(quizKeys.attempt(attempt.id), result);
-      // A pass may have completed the lesson and unlocked the next one.
+      // A pass may have completed the lesson, unlocked the next one, and
+      // awarded XP / achievements.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['progress'] }),
         queryClient.invalidateQueries({ queryKey: ['quiz', 'summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['gamification'] }),
       ]);
     },
   });

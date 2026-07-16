@@ -7,6 +7,8 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BoltIcon from '@mui/icons-material/Bolt';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +16,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import { useAppSelector } from '../../app/hooks';
 import { curriculumKeys, fetchPathTree } from '../curriculum/api';
 import { fetchProgressMap, progressKeys } from '../progress/api';
+import { fetchStats, gamificationKeys } from '../gamification/api';
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -131,28 +134,99 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="h3" component="h2" gutterBottom>
-              {t('dashboard.profileTitle')}
-            </Typography>
-            <Stack spacing={1.5}>
-              <Typography>{user.email}</Typography>
-              <Box>
-                <Chip
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  label={t('dashboard.roleLabel', { role: user.role })}
-                />
-              </Box>
-              <Typography color="text.secondary" variant="body2">
-                {t('dashboard.memberSince', { date: memberSince })}
+        <Stack spacing={3} sx={{ flex: 1 }}>
+          <StatsCard />
+          <Card>
+            <CardContent>
+              <Typography variant="h3" component="h2" gutterBottom>
+                {t('dashboard.profileTitle')}
               </Typography>
-            </Stack>
-          </CardContent>
-        </Card>
+              <Stack spacing={1.5}>
+                <Typography>{user.email}</Typography>
+                <Box>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={t('dashboard.roleLabel', { role: user.role })}
+                  />
+                </Box>
+                <Typography color="text.secondary" variant="body2">
+                  {t('dashboard.memberSince', { date: memberSince })}
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
       </Stack>
     </Stack>
+  );
+}
+
+function StatsCard() {
+  const { t } = useTranslation();
+  const { data: stats } = useQuery({ queryKey: gamificationKeys.stats, queryFn: fetchStats });
+  if (!stats) return null;
+
+  const levelPct =
+    stats.nextLevelXp > 0 ? Math.round((stats.levelXp / stats.nextLevelXp) * 100) : 100;
+
+  return (
+    <Card data-testid="dashboard-stats">
+      <CardContent>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+          <BoltIcon color="primary" />
+          <Typography variant="h3" component="h2">
+            {t('gamification.yourProgress')}
+          </Typography>
+        </Stack>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={3}>
+            <Box>
+              <Typography variant="h2" component="p">
+                {stats.totalXp}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('gamification.xp')}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="h2" component="p">
+                {stats.level}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('gamification.level')}
+              </Typography>
+            </Box>
+            <Box>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <Typography variant="h2" component="p">
+                  {stats.currentStreak}
+                </Typography>
+                <LocalFireDepartmentIcon color={stats.activeToday ? 'warning' : 'disabled'} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {t('gamification.dayStreak')}
+              </Typography>
+            </Box>
+          </Stack>
+          <Box>
+            <LinearProgress
+              variant="determinate"
+              value={levelPct}
+              aria-label={t('gamification.levelProgress')}
+              sx={{ height: 8, borderRadius: 4 }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {t('gamification.toNextLevel', {
+                have: stats.levelXp,
+                need: stats.nextLevelXp,
+                level: stats.level + 1,
+              })}
+            </Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }

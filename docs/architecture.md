@@ -115,6 +115,15 @@ Two-tier execution, exactly as designed:
 - **Feedback thread** per submission (`SubmissionMessage`) shared by student and reviewers — the review history survives resubmissions because the submission row is reused (round++) rather than replaced.
 - **Gating applies**: project pages/submission are gated on topic accessibility (same evaluator as lessons); `ProjectApproved` is emitted on the event bus for gamification (M7).
 
+## Gamification & certificates (M7)
+
+- **XP is an append-only ledger.** `XpTransaction` has a unique `idempotencyKey` derived from `(reason, source)`; a retried or re-graded event inserts a duplicate that hits the constraint and no-ops. `UserStats` (XP, level, streak) is projected in the _same transaction_ as the ledger insert, so it can never drift from the ledger.
+- **Timezone-correct streaks** ([streak.ts](../apps/api/src/modules/gamification/domain/streak.ts)): activity is compared as user-local calendar dates (`Intl.DateTimeFormat` with the user's IANA zone), never as 24-hour deltas — a DST day still counts as one day. Same day = no change, next day = +1, gap = reset to 1; longest streak is preserved.
+- **Achievements** are pure predicates over aggregate progress; the engine re-evaluates after every XP event and grants newly-satisfied ones idempotently (composite key), awarding their bonus XP through the same ledger.
+- **Leaderboard**: a Redis ZSET is the fast read index (`ZADD` on award, `ZREVRANGE`/`ZREVRANK` on read); Postgres `UserStats` is the source of truth and rebuilds the ZSET on a cold cache. The caller's own rank is always resolved, even outside the top slice.
+- **Certificates** issue on module/path completion (checked from progress records, so issuance self-heals on the next event), idempotent on `(user, scope, scopeId)`. Each carries a serial and an unguessable `verificationCode`; a **public, unauthenticated** `/verify/:code` endpoint and page confirm authenticity. PDF export is the browser print dialog (a headless-render worker is a documented later add).
+- **Wiring**: gamification subscribes to `AttemptGraded`, `ProjectApproved`, and the new `LessonCompleted` (quizless manual completion) on the in-process event bus — no direct dependency from the publishing modules.
+
 ## Progress & gating (M4)
 
 - **Derived availability, persisted achievement.** Only `IN_PROGRESS`/`COMPLETED` are stored (`ProgressRecord`, polymorphic over lesson/topic/module). `LOCKED`/`AVAILABLE` are computed on every read from `PrerequisiteRule` + completions ([gating.ts](../apps/api/src/modules/progress/domain/gating.ts)) — there is no unlock state to corrupt or race.

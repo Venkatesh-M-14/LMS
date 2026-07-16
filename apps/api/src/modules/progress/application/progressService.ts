@@ -7,6 +7,7 @@ import {
 import { AppError, NotFoundError } from '../../../core/errors/appError';
 import { GatingEvaluator } from '../domain/gating';
 import type { ProgressRepository } from './ports';
+import type { EventBus } from '../../../core/events/eventBus';
 
 export interface Actor {
   id: string;
@@ -18,7 +19,10 @@ export interface Actor {
  * completion cascades (lesson → topic → module) are recorded exactly once.
  */
 export class ProgressService {
-  constructor(private readonly repo: ProgressRepository) {}
+  constructor(
+    private readonly repo: ProgressRepository,
+    private readonly events?: EventBus,
+  ) {}
 
   /** The whole path's effective statuses for one user (auto-enrolls students). */
   async getMap(actor: Actor): Promise<ProgressMap> {
@@ -98,7 +102,13 @@ export class ProgressService {
       );
     }
     await this.assertLessonAccessible(actor, lessonId);
-    return this.completeLessonCascade(actor.id, lessonId, null);
+    const result = await this.completeLessonCascade(actor.id, lessonId, null);
+    // Quiz lessons emit AttemptGraded; quizless lessons notify here so
+    // gamification (XP + certificates) reacts to this path too.
+    if (result.lessonCompleted && this.events) {
+      await this.events.emit('LessonCompleted', { userId: actor.id, lessonId });
+    }
+    return result;
   }
 
   /** Event subscriber: a graded, passed quiz completes its lesson. */

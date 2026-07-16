@@ -1,4 +1,4 @@
-# API Reference — Milestones 1–6
+# API Reference — Milestones 1–7
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -141,6 +141,21 @@ Gating errors elsewhere: `GET /curriculum/lessons/:id` and `POST /assessments/:i
 | `POST /cms/projects/:id/request-changes` | IN_REVIEW → CHANGES_REQUESTED (`{ message }` required, lands in the thread)                                                                                |
 | `POST /cms/projects/:id/approve`         | IN_REVIEW → APPROVED with `{ scores: [{criterionId, points, comment?}] }` — every criterion, within max (`RUBRIC_INCOMPLETE` / `RUBRIC_SCORE_INVALID` 422) |
 | `POST /cms/projects/:id/messages`        | Reviewer thread message                                                                                                                                    |
+
+## Gamification _(Bearer token)_
+
+| Endpoint                         | Purpose                                                             |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `GET /gamification/stats`        | XP, level (+ progress to next), current/longest streak, activeToday |
+| `GET /gamification/achievements` | All achievements with earned state + dates                          |
+| `GET /gamification/leaderboard`  | Top learners by XP + the caller's own rank                          |
+| `GET /gamification/certificates` | The caller's issued certificates                                    |
+
+XP is awarded by event subscribers (quiz pass, lesson complete, project approved), idempotent on a deterministic key; there is no client-facing award endpoint.
+
+## Certificate verification _(public, no auth)_
+
+`GET /verify/:code` → `{ valid, serial, holderName, scope, scopeTitle, issuedAt }`. Returns `{ valid: false, … }` for an unknown code. Backs the shareable `/verify/:code` page.
 
 ## Operational
 

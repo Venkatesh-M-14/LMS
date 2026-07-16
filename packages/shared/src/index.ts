@@ -7,3 +7,4 @@ export * from './cms/schemas';
 export * from './assessments/schemas';
 export * from './progress/schemas';
 export * from './projects/schemas';
+export * from './gamification/schemas';

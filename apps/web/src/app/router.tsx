@@ -17,6 +17,10 @@ import { AttemptPage } from '../features/quiz/AttemptPage';
 import { ProjectPage } from '../features/projects/ProjectPage';
 import { ProjectQueuePage } from '../features/projects/ProjectQueuePage';
 import { ProjectReviewPage } from '../features/projects/ProjectReviewPage';
+import { LeaderboardPage } from '../features/gamification/LeaderboardPage';
+import { AchievementsPage } from '../features/gamification/AchievementsPage';
+import { CertificatesPage } from '../features/gamification/CertificatesPage';
+import { VerifyCertificatePage } from '../features/gamification/VerifyCertificatePage';
 import { NotFoundPage } from '../shared/components/NotFoundPage';
 
 function Root() {
@@ -31,6 +35,8 @@ export const router = createBrowserRouter([
   {
     element: <Root />,
     children: [
+      // Public: shareable certificate verification, no session required.
+      { path: '/verify/:code', element: <VerifyCertificatePage /> },
       {
         element: <GuestOnlyRoute />,
         children: [
@@ -49,6 +55,9 @@ export const router = createBrowserRouter([
               { path: '/lessons/:lessonId', element: <LessonPage /> },
               { path: '/attempts/:attemptId', element: <AttemptPage /> },
               { path: '/projects/topic/:topicId', element: <ProjectPage /> },
+              { path: '/leaderboard', element: <LeaderboardPage /> },
+              { path: '/achievements', element: <AchievementsPage /> },
+              { path: '/certificates', element: <CertificatesPage /> },
               {
                 element: <RoleRoute roles={['INSTRUCTOR']} />,
                 children: [

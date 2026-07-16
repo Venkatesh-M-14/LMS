@@ -42,6 +42,10 @@ model User {
   projectSubmissions ProjectSubmission[]
   reviewedProjects   ProjectSubmission[] @relation("ProjectReviewer")
   submissionMessages SubmissionMessage[]
+  xpTransactions     XpTransaction[]
+  stats              UserStats?
+  achievements       UserAchievement[]
+  certificates       Certificate[]
 
   @@map("users")
 }
@@ -606,4 +610,98 @@ model SubmissionMessage {
 
   @@index([submissionId, createdAt])
   @@map("submission_messages")
+}
+
+// ─── Gamification ────────────────────────────────────────────────────────────
+// XP is an append-only ledger with a unique idempotencyKey (a retried award
+// is a no-op). UserStats is a denormalized projection updated in the same
+// transaction as the ledger insert; the live leaderboard is a Redis ZSET that
+// can be rebuilt from the ledger.
+
+enum XpReason {
+  LESSON_COMPLETED
+  QUIZ_PASSED
+  QUIZ_PASSED_FIRST_TRY
+  PROJECT_APPROVED
+  ACHIEVEMENT_EARNED
+  STREAK_BONUS
+}
+
+model XpTransaction {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount         Int
+  reason         XpReason
+  /// Stable key derived from (reason, source) — makes awards idempotent.
+  idempotencyKey String   @unique
+  refType        String   @default("")
+  refId          String   @default("")
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("xp_transactions")
+}
+
+/// Denormalized per-user projection of the ledger + streak state.
+model UserStats {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalXp          Int      @default(0)
+  level            Int      @default(1)
+  currentStreak    Int      @default(0)
+  longestStreak    Int      @default(0)
+  /// The user-local calendar date (YYYY-MM-DD) of their last activity.
+  lastActivityDate String   @default("")
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_stats")
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  slug        String @unique
+  title       String
+  description String
+  icon        String @default("EmojiEvents")
+  xpReward    Int    @default(0)
+  /// Ordering for display.
+  order       Int    @default(0)
+
+  earnedBy UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  earnedAt      DateTime    @default(now())
+
+  @@id([userId, achievementId])
+  @@map("user_achievements")
+}
+
+enum CertificateScope {
+  MODULE
+  PATH
+}
+
+model Certificate {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope            CertificateScope
+  /// moduleId or pathId depending on scope.
+  scopeId          String
+  scopeTitle       String
+  serial           String           @unique
+  /// Public, unguessable code for the verification page.
+  verificationCode String           @unique
+  issuedAt         DateTime         @default(now())
+
+  @@unique([userId, scope, scopeId])
+  @@map("certificates")
 }
