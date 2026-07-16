@@ -57,6 +57,26 @@ export class ProgressService {
     // Lesson not part of the active path — nothing to gate (404s elsewhere).
   }
 
+  /** Same gate at topic level — used by the projects module. */
+  async assertTopicAccessible(actor: Actor, topicId: string): Promise<void> {
+    if (actor.role !== 'STUDENT') return;
+    const { modules } = await this.repo.getPathStructure();
+    const evaluator = await this.buildEvaluator(actor.id, modules);
+    for (const module of modules) {
+      const topic = module.topics.find((candidate) => candidate.id === topicId);
+      if (topic) {
+        if (!evaluator.topicAccessible(topic, module)) {
+          throw new AppError(
+            ErrorCodes.GATING_LOCKED,
+            403,
+            'Complete the previous topics to unlock this project',
+          );
+        }
+        return;
+      }
+    }
+  }
+
   /** Records "the student opened this lesson" (never downgrades COMPLETED). */
   async markLessonOpened(actor: Actor, lessonId: string): Promise<void> {
     if (actor.role !== 'STUDENT') return;

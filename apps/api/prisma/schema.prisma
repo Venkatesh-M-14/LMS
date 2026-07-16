@@ -32,13 +32,16 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  refreshTokens    RefreshToken[]
-  authoredVersions LessonVersion[]  @relation("AuthoredVersions")
-  reviewedVersions LessonVersion[]  @relation("ReviewedVersions")
-  attempts         Attempt[]
-  itemSubmissions  ItemSubmission[]
-  enrollments      Enrollment[]
-  progressRecords  ProgressRecord[]
+  refreshTokens      RefreshToken[]
+  authoredVersions   LessonVersion[]     @relation("AuthoredVersions")
+  reviewedVersions   LessonVersion[]     @relation("ReviewedVersions")
+  attempts           Attempt[]
+  itemSubmissions    ItemSubmission[]
+  enrollments        Enrollment[]
+  progressRecords    ProgressRecord[]
+  projectSubmissions ProjectSubmission[]
+  reviewedProjects   ProjectSubmission[] @relation("ProjectReviewer")
+  submissionMessages SubmissionMessage[]
 
   @@map("users")
 }
@@ -132,8 +135,9 @@ model Topic {
   order       Int
   depth       TopicDepth @default(OUTLINE)
 
-  lessons Lesson[]
-  skills  Skill[]
+  lessons      Lesson[]
+  skills       Skill[]
+  projectBrief ProjectBrief?
 
   @@unique([moduleId, slug])
   @@unique([moduleId, order])
@@ -501,4 +505,105 @@ model ExecutionRun {
   @@index([itemSubmissionId, createdAt])
   @@index([status])
   @@map("execution_runs")
+}
+
+// ─── Projects & machine coding ───────────────────────────────────────────────
+// Topic-level project briefs with rubric definitions. Submissions are repo +
+// demo URLs (bundle upload arrives with object storage); reviews follow
+// PENDING → IN_REVIEW → CHANGES_REQUESTED | APPROVED with a feedback thread.
+
+enum ProjectKind {
+  MINI_PROJECT
+  MACHINE_CODING
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+}
+
+model ProjectBrief {
+  id        String      @id @default(cuid())
+  topicId   String      @unique
+  topic     Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  kind      ProjectKind
+  title     String
+  /// Full brief: goals, requirements, constraints (markdown).
+  briefMd   String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  rubric      RubricCriterion[]
+  submissions ProjectSubmission[]
+
+  @@map("project_briefs")
+}
+
+model RubricCriterion {
+  id          String       @id @default(cuid())
+  briefId     String
+  brief       ProjectBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  description String       @default("")
+  maxPoints   Int
+
+  scores RubricScore[]
+
+  @@unique([briefId, order])
+  @@map("rubric_criteria")
+}
+
+/// One submission row per (user, brief): resubmissions update it in place;
+/// the message thread preserves the review history.
+model ProjectSubmission {
+  id              String       @id @default(cuid())
+  briefId         String
+  brief           ProjectBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repoUrl         String
+  demoUrl         String       @default("")
+  notes           String       @default("")
+  status          ReviewStatus @default(PENDING)
+  submissionRound Int          @default(1)
+  reviewerId      String?
+  reviewer        User?        @relation("ProjectReviewer", fields: [reviewerId], references: [id])
+  submittedAt     DateTime     @default(now())
+  reviewedAt      DateTime?
+  updatedAt       DateTime     @updatedAt
+
+  scores   RubricScore[]
+  messages SubmissionMessage[]
+
+  @@unique([briefId, userId])
+  @@index([status, submittedAt])
+  @@map("project_submissions")
+}
+
+model RubricScore {
+  submissionId String
+  submission   ProjectSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterionId  String
+  criterion    RubricCriterion   @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  points       Float
+  comment      String            @default("")
+
+  @@id([submissionId, criterionId])
+  @@map("rubric_scores")
+}
+
+model SubmissionMessage {
+  id           String            @id @default(cuid())
+  submissionId String
+  submission   ProjectSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User              @relation(fields: [authorId], references: [id])
+  body         String
+  createdAt    DateTime          @default(now())
+
+  @@index([submissionId, createdAt])
+  @@map("submission_messages")
 }

@@ -14,6 +14,9 @@ import { LessonEditorPage } from '../features/cms/LessonEditorPage';
 import { AssessmentEditorPage } from '../features/cms/AssessmentEditorPage';
 import { GradingQueuePage } from '../features/cms/GradingQueuePage';
 import { AttemptPage } from '../features/quiz/AttemptPage';
+import { ProjectPage } from '../features/projects/ProjectPage';
+import { ProjectQueuePage } from '../features/projects/ProjectQueuePage';
+import { ProjectReviewPage } from '../features/projects/ProjectReviewPage';
 import { NotFoundPage } from '../shared/components/NotFoundPage';
 
 function Root() {
@@ -45,6 +48,7 @@ export const router = createBrowserRouter([
               { path: '/curriculum', element: <CurriculumPage /> },
               { path: '/lessons/:lessonId', element: <LessonPage /> },
               { path: '/attempts/:attemptId', element: <AttemptPage /> },
+              { path: '/projects/topic/:topicId', element: <ProjectPage /> },
               {
                 element: <RoleRoute roles={['INSTRUCTOR']} />,
                 children: [
@@ -55,6 +59,8 @@ export const router = createBrowserRouter([
                     element: <AssessmentEditorPage />,
                   },
                   { path: '/instructor/grading', element: <GradingQueuePage /> },
+                  { path: '/instructor/projects', element: <ProjectQueuePage /> },
+                  { path: '/instructor/projects/:submissionId', element: <ProjectReviewPage /> },
                 ],
               },
             ],

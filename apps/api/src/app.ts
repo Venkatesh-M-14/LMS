@@ -48,6 +48,8 @@ export function createApp(container: Container): Express {
   app.use('/api/v1/cms', routers.cmsAssessments);
   app.use('/api/v1/assessments', routers.assessments);
   app.use('/api/v1/progress', routers.progress);
+  app.use('/api/v1/projects', routers.projects);
+  app.use('/api/v1/cms', routers.cmsProjects);
 
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));

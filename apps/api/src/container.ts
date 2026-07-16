@@ -41,6 +41,12 @@ import type { JwtTokenService as JwtTokenServiceType } from './modules/auth/infr
 import { PrismaProgressRepository } from './modules/progress/infrastructure/prismaProgressRepository';
 import { ProgressService } from './modules/progress/application/progressService';
 import { buildProgressRouter } from './modules/progress/http/progressRouter';
+import { ProjectService } from './modules/projects/application/projectService';
+import { PrismaProjectRepository } from './modules/projects/infrastructure/prismaProjectRepository';
+import {
+  buildCmsProjectsRouter,
+  buildProjectsRouter,
+} from './modules/projects/http/projectsRouter';
 import type { Router } from 'express';
 
 export interface Container {
@@ -57,6 +63,8 @@ export interface Container {
     cmsAssessments: Router;
     assessments: Router;
     progress: Router;
+    projects: Router;
+    cmsProjects: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   eventBus: EventBus;
@@ -144,6 +152,12 @@ export async function buildContainer(env: Env): Promise<Container> {
     clock,
   });
   const assessmentAuthoring = new AssessmentAuthoringService(assessmentRepo);
+  const projectService = new ProjectService({
+    repo: new PrismaProjectRepository(prisma),
+    gate: progressService,
+    clock,
+    events: eventBus,
+  });
   const judgeService = new JudgeService({
     attempts: attemptRepo,
     sandbox: runInSandbox,
@@ -189,6 +203,8 @@ export async function buildContainer(env: Env): Promise<Container> {
       }),
       assessments: buildAssessmentsRouter({ attempts: attemptService, authenticate }),
       progress: buildProgressRouter({ progress: progressService, authenticate }),
+      projects: buildProjectsRouter({ projects: projectService, authenticate }),
+      cmsProjects: buildCmsProjectsRouter({ projects: projectService, authenticate }),
     },
     globalRateLimiter,
     eventBus,

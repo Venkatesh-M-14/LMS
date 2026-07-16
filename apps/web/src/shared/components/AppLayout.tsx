@@ -109,6 +109,14 @@ export function AppLayout() {
                 >
                   {t('nav.grading')}
                 </Button>
+                <Button
+                  component={RouterLink}
+                  to="/instructor/projects"
+                  color="inherit"
+                  size="small"
+                >
+                  {t('nav.projects')}
+                </Button>
               </>
             ) : null}
           </Box>

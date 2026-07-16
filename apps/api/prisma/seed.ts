@@ -5,6 +5,7 @@ import { MODULES_SEED, PATH_SEED } from './seedData/curriculum';
 import { LESSONS_SEED } from './seedData/lessons';
 import { QUIZZES_SEED } from './seedData/quizzes';
 import { CHALLENGE_ATTACHMENTS, CHALLENGES_SEED } from './seedData/challenges';
+import { PROJECT_BRIEFS_SEED } from './seedData/projects';
 import { generateDefaultRules } from '../src/modules/progress/domain/gating';
 
 /**
@@ -327,6 +328,38 @@ async function seedChallenges(prisma: PrismaClient) {
   console.warn(`Attached coding items: ${attached}`);
 }
 
+async function seedProjectBriefs(prisma: PrismaClient) {
+  let created = 0;
+  let skipped = 0;
+  for (const seed of PROJECT_BRIEFS_SEED) {
+    const topic = await prisma.topic.findFirst({ where: { slug: seed.topicSlug } });
+    if (!topic) continue;
+    const existing = await prisma.projectBrief.findUnique({ where: { topicId: topic.id } });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    await prisma.projectBrief.create({
+      data: {
+        topicId: topic.id,
+        kind: seed.kind,
+        title: seed.title,
+        briefMd: seed.briefMd,
+        rubric: {
+          create: seed.rubric.map((criterion, index) => ({
+            order: index + 1,
+            title: criterion.title,
+            description: criterion.description,
+            maxPoints: criterion.maxPoints,
+          })),
+        },
+      },
+    });
+    created++;
+  }
+  console.warn(`Seeded project briefs: ${created} created, ${skipped} left untouched`);
+}
+
 async function seedPrerequisiteRules(prisma: PrismaClient) {
   const path = await prisma.path.findFirst({
     where: { isActive: true },
@@ -375,6 +408,7 @@ async function main(): Promise<void> {
     await seedLessons(prisma, topicIdBySlug, instructor.id, admin.id);
     await seedQuizzes(prisma);
     await seedChallenges(prisma);
+    await seedProjectBriefs(prisma);
     await seedPrerequisiteRules(prisma);
   } finally {
     await prisma.$disconnect();

@@ -26,6 +26,8 @@ import { useTranslation } from 'react-i18next';
 import type { UnitProgress } from '@academy/shared';
 import { curriculumKeys, fetchPathTree } from './api';
 import { fetchProgressMap, progressKeys } from '../progress/api';
+import { fetchBriefSummaries, projectKeys } from '../projects/api';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 function LessonStatusIcon({ progress }: { progress: UnitProgress | undefined }) {
   switch (progress?.status) {
@@ -51,6 +53,7 @@ export function CurriculumPage() {
     queryFn: fetchPathTree,
   });
   const { data: progress } = useQuery({ queryKey: progressKeys.map, queryFn: fetchProgressMap });
+  const { data: briefs } = useQuery({ queryKey: projectKeys.briefs, queryFn: fetchBriefSummaries });
 
   if (isPending) {
     return (
@@ -164,6 +167,19 @@ export function CurriculumPage() {
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         {topic.description}
                       </Typography>
+                      {briefs?.some((b) => b.topicId === topic.id) ? (
+                        <Button
+                          component={RouterLink}
+                          to={`/projects/topic/${topic.id}`}
+                          size="small"
+                          variant="outlined"
+                          startIcon={<AssignmentIcon />}
+                          disabled={topicStatus === 'LOCKED'}
+                          sx={{ mb: 1 }}
+                        >
+                          {briefs.find((b) => b.topicId === topic.id)?.title}
+                        </Button>
+                      ) : null}
                       {readable.length > 0 ? (
                         <List dense disablePadding>
                           {readable.map((lesson) => {

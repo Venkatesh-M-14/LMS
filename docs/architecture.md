@@ -107,6 +107,14 @@ Two-tier execution, exactly as designed:
 - **Snapshot grading.** At attempt start the full challenge (instructions, starter files, ALL tests) is frozen into the attempt snapshot; the judge grades from the snapshot, so challenge edits never affect in-flight attempts. Solutions are never part of the freeze.
 - **The sandbox** ([sandboxRunner.cjs](../apps/api/src/modules/judge/runner/sandboxRunner.cjs)) is one child process per run with layered containment: clean env (no secrets), Node permission model (fs reads limited to the runner + node_modules, no writes/child_process/workers), network globals deleted before user code runs, a curated `vm` context (in-context console/assert — no host functions in user reach), per-file/per-test sync timeouts, `--max-old-space-size` memory cap, and a parent SIGKILL deadline. **Documented trade-off:** process-level, not VM-level isolation — the `JudgeService` port allows swapping this lane for isolated-vm/gVisor without redesign. The abuse suite (infinite loops, allocation bombs, constructor-chain escapes, fs/network/env probes) runs against the real runner in CI.
 
+## Projects & machine coding (M6)
+
+- **Topic-level briefs** (`ProjectBrief`, MINI_PROJECT | MACHINE_CODING) with rubric definitions (`RubricCriterion`); submissions are repo + optional demo URLs (bundle upload arrives with object storage — deliberate deferral).
+- **Review state machine** in one pure module ([reviewWorkflow.ts](../apps/api/src/modules/projects/domain/reviewWorkflow.ts)): `PENDING → IN_REVIEW → CHANGES_REQUESTED | APPROVED`; resubmission is allowed only from CHANGES_REQUESTED and resets to PENDING with an incremented round; transitions are guarded updates (concurrent reviewers cannot double-transition).
+- **Rubric-scored approval**: every criterion must be scored exactly once within its max; the earned total is derived from the scores, never stored redundantly.
+- **Feedback thread** per submission (`SubmissionMessage`) shared by student and reviewers — the review history survives resubmissions because the submission row is reused (round++) rather than replaced.
+- **Gating applies**: project pages/submission are gated on topic accessibility (same evaluator as lessons); `ProjectApproved` is emitted on the event bus for gamification (M7).
+
 ## Progress & gating (M4)
 
 - **Derived availability, persisted achievement.** Only `IN_PROGRESS`/`COMPLETED` are stored (`ProgressRecord`, polymorphic over lesson/topic/module). `LOCKED`/`AVAILABLE` are computed on every read from `PrerequisiteRule` + completions ([gating.ts](../apps/api/src/modules/progress/domain/gating.ts)) — there is no unlock state to corrupt or race.

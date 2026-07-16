@@ -6,3 +6,4 @@ export * from './curriculum/schemas';
 export * from './cms/schemas';
 export * from './assessments/schemas';
 export * from './progress/schemas';
+export * from './projects/schemas';

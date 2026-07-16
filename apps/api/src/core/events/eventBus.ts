@@ -17,6 +17,12 @@ export interface DomainEvents {
     passed: boolean;
     scorePct: number;
   };
+  /** Consumed by gamification (M7); emitted from the project review flow. */
+  ProjectApproved: {
+    userId: string;
+    briefId: string;
+    topicId: string;
+  };
 }
 
 type Handler<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => Promise<void> | void;

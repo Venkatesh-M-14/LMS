@@ -41,6 +41,12 @@ export const ErrorCodes = {
   // Progress & gating
   GATING_LOCKED: 'GATING_LOCKED',
   LESSON_HAS_QUIZ: 'LESSON_HAS_QUIZ',
+
+  // Projects
+  REVIEW_INVALID_TRANSITION: 'REVIEW_INVALID_TRANSITION',
+  RESUBMIT_NOT_ALLOWED: 'RESUBMIT_NOT_ALLOWED',
+  RUBRIC_INCOMPLETE: 'RUBRIC_INCOMPLETE',
+  RUBRIC_SCORE_INVALID: 'RUBRIC_SCORE_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

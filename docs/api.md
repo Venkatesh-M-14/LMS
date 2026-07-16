@@ -1,4 +1,4 @@
-# API Reference — Milestones 1–5
+# API Reference — Milestones 1–6
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -121,6 +121,26 @@ Errors: `SUBMISSION_NOT_PENDING` 409 · `SCORE_EXCEEDS_POINTS` 422
 | `POST /progress/lessons/:id/complete` | Manual completion — only for lessons **without** a quiz (`LESSON_HAS_QUIZ` 409 otherwise). Returns `{ lessonCompleted, topicCompleted, moduleCompleted }`.           |
 
 Gating errors elsewhere: `GET /curriculum/lessons/:id` and `POST /assessments/:id/attempts` return `GATING_LOCKED` 403 for students whose prerequisites are unmet (instructors/admins bypass).
+
+## Projects _(Bearer token)_
+
+| Endpoint                                  | Purpose                                                                                                           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET /projects/briefs`                    | Brief summaries (which topics have projects)                                                                      |
+| `GET /projects/topics/:topicId`           | Brief + rubric + the caller's submission (gated: `GATING_LOCKED` 403 on locked topics)                            |
+| `POST /projects/briefs/:id/submit` → 201  | Submit `{ repoUrl, demoUrl?, notes? }`; resubmit allowed only from CHANGES_REQUESTED (`RESUBMIT_NOT_ALLOWED` 409) |
+| `POST /projects/submissions/:id/messages` | Add to the feedback thread (owner only)                                                                           |
+
+## CMS — project reviews _(INSTRUCTOR or ADMIN)_
+
+| Endpoint                                 | Purpose                                                                                                                                                    |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /cms/projects`                      | Queue: PENDING + IN_REVIEW submissions, oldest first                                                                                                       |
+| `GET /cms/projects/:id`                  | Full review detail (submission, brief, rubric, thread)                                                                                                     |
+| `POST /cms/projects/:id/start-review`    | PENDING → IN_REVIEW                                                                                                                                        |
+| `POST /cms/projects/:id/request-changes` | IN_REVIEW → CHANGES_REQUESTED (`{ message }` required, lands in the thread)                                                                                |
+| `POST /cms/projects/:id/approve`         | IN_REVIEW → APPROVED with `{ scores: [{criterionId, points, comment?}] }` — every criterion, within max (`RUBRIC_INCOMPLETE` / `RUBRIC_SCORE_INVALID` 422) |
+| `POST /cms/projects/:id/messages`        | Reviewer thread message                                                                                                                                    |
 
 ## Operational
 
