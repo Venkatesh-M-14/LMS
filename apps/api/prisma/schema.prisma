@@ -52,6 +52,15 @@ model User {
   notifications       Notification[]
   emailMessages       EmailOutbox[]
   analyticsEvents     AnalyticsEvent[]
+  chatMemberships     ChatMembership[]
+  chatMessages        ChatMessage[]
+  suggestions         SyllabusSuggestion[]
+  reviewedSuggestions SyllabusSuggestion[] @relation("SuggestionReviewer")
+
+  /// Notification preferences (M10). Peer chatter is opt-out per user.
+  notifyPeerSuccess Boolean @default(true)
+  notifyOvertaken   Boolean @default(true)
+  emailMilestones   Boolean @default(true)
 
   @@map("users")
 }
@@ -175,6 +184,8 @@ model Lesson {
   assessment          Assessment?
   mentorConversations MentorConversation[]
   revisionTargets     RevisionAssignment[] @relation("RevisionTarget")
+  chatChannels        ChatChannel[]
+  suggestions         SyllabusSuggestion[]
 
   @@unique([topicId, slug])
   @@unique([topicId, order])
@@ -809,6 +820,11 @@ enum NotificationType {
   PROJECT_REVIEWED
   REVISION_ASSIGNED
   LESSON_UNLOCKED
+  /// M10 — the circle sees each other's wins and rank changes.
+  PEER_SUCCESS
+  OVERTAKEN
+  SUGGESTION_SUBMITTED
+  SUGGESTION_REVIEWED
 }
 
 /// In-app notification. Created by event subscribers; pushed live over
@@ -878,4 +894,102 @@ model AnalyticsEvent {
 
   @@index([name, occurredAt])
   @@map("analytics_events")
+}
+
+// ─── Chat & syllabus suggestions (M10) ───────────────────────────────────────
+
+enum ChatChannelType {
+  /// The single circle-wide room.
+  GROUP
+  /// A 1:1 conversation.
+  DIRECT
+  /// A discussion thread attached to one lesson.
+  LESSON
+}
+
+model ChatChannel {
+  id   String          @id @default(cuid())
+  type ChatChannelType
+  /// Stable dedupe key, unique so get-or-create is a single atomic upsert:
+  /// "group" | "lesson:<lessonId>" | "dm:<userIdA>:<userIdB>" (ids sorted).
+  key       String   @unique
+  lessonId  String?
+  lesson    Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  members  ChatMembership[]
+  messages ChatMessage[]
+
+  @@map("chat_channels")
+}
+
+/// For DIRECT channels membership is the access-control list. For GROUP and
+/// LESSON channels (open to the whole circle) the row is created lazily on
+/// first open and only carries the read marker.
+model ChatMembership {
+  channelId  String
+  channel    ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime?
+
+  @@id([channelId, userId])
+  @@index([userId])
+  @@map("chat_memberships")
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime    @default(now())
+
+  @@index([channelId, createdAt])
+  @@map("chat_messages")
+}
+
+enum SuggestionKind {
+  /// Free-text: "please cover X" / "we need a question on Y".
+  IDEA
+  /// A complete draft question the admin can accept straight into the bank.
+  DRAFT_QUESTION
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+/// Student input into the syllabus. Accepting a DRAFT_QUESTION materialises a
+/// real AssessmentItem in the target lesson's bank (createdItemId records it).
+model SyllabusSuggestion {
+  id       String         @id @default(cuid())
+  userId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind     SuggestionKind
+  /// Target lesson — required for a draft question (that's whose bank it joins).
+  lessonId String?
+  lesson   Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  /// The idea itself, or the rationale accompanying a draft.
+  body     String
+  /// DRAFT_QUESTION only: { type, points, payload } validated against the
+  /// same item contracts the authoring editor uses.
+  draft    Json?
+
+  status        SuggestionStatus @default(PENDING)
+  adminNote     String?
+  reviewedById  String?
+  reviewedBy    User?            @relation("SuggestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  /// Set when an accepted draft was materialised into the question bank.
+  createdItemId String?
+  createdAt     DateTime         @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@map("syllabus_suggestions")
 }

@@ -120,6 +120,34 @@ export class PrismaAssessmentRepository implements AssessmentRepository {
     });
   }
 
+  async appendItem(assessmentId: string, input: AuthoringItemInput): Promise<{ id: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const last = await tx.assessmentItem.findFirst({
+        where: { assessmentId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      const created = await tx.assessmentItem.create({
+        data: {
+          assessmentId,
+          order: (last?.order ?? 0) + 1,
+          type: input.item.type,
+          points: input.points,
+          payload: input.item.payload as Prisma.InputJsonValue,
+          payloadSchemaVersion: ASSESSMENT_ITEM_SCHEMA_VERSION,
+        },
+        select: { id: true },
+      });
+      if (input.skillIds.length > 0) {
+        await tx.assessmentItemSkill.createMany({
+          data: input.skillIds.map((skillId) => ({ itemId: created.id, skillId })),
+          skipDuplicates: true,
+        });
+      }
+      return created;
+    });
+  }
+
   async getLessonPublishedVersionId(lessonId: string): Promise<string | null> {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },

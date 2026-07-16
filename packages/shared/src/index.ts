@@ -11,3 +11,5 @@ export * from './gamification/schemas';
 export * from './mentor/schemas';
 export * from './notifications/schemas';
 export * from './analytics/schemas';
+export * from './chat/schemas';
+export * from './suggestions/schemas';

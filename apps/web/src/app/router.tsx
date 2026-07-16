@@ -22,6 +22,9 @@ import { AchievementsPage } from '../features/gamification/AchievementsPage';
 import { CertificatesPage } from '../features/gamification/CertificatesPage';
 import { MentorPage } from '../features/mentor/MentorPage';
 import { AnalyticsDashboardPage } from '../features/analytics/AnalyticsDashboardPage';
+import { ChatPage } from '../features/chat/ChatPage';
+import { SuggestionsPage } from '../features/suggestions/SuggestionsPage';
+import { SuggestionsInboxPage } from '../features/suggestions/SuggestionsInboxPage';
 import { VerifyCertificatePage } from '../features/gamification/VerifyCertificatePage';
 import { NotFoundPage } from '../shared/components/NotFoundPage';
 
@@ -58,6 +61,8 @@ export const router = createBrowserRouter([
               { path: '/attempts/:attemptId', element: <AttemptPage /> },
               { path: '/projects/topic/:topicId', element: <ProjectPage /> },
               { path: '/mentor', element: <MentorPage /> },
+              { path: '/chat', element: <ChatPage /> },
+              { path: '/suggestions', element: <SuggestionsPage /> },
               { path: '/leaderboard', element: <LeaderboardPage /> },
               { path: '/achievements', element: <AchievementsPage /> },
               { path: '/certificates', element: <CertificatesPage /> },
@@ -74,6 +79,12 @@ export const router = createBrowserRouter([
                   { path: '/instructor/grading', element: <GradingQueuePage /> },
                   { path: '/instructor/projects', element: <ProjectQueuePage /> },
                   { path: '/instructor/projects/:submissionId', element: <ProjectReviewPage /> },
+                ],
+              },
+              {
+                element: <RoleRoute roles={['ADMIN']} />,
+                children: [
+                  { path: '/instructor/suggestions', element: <SuggestionsInboxPage /> },
                 ],
               },
             ],

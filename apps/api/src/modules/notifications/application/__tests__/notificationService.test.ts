@@ -1,14 +1,20 @@
-import type { NotificationView } from '@academy/shared';
+import type { NotificationPreferences, NotificationView } from '@academy/shared';
 import { NotificationService } from '../notificationService';
-import type { CreateNotificationInput, NotificationRepository } from '../ports';
+import type { CreateNotificationInput, NotificationRepository, PeerPreference } from '../ports';
 
+/** Tracks who each notification went to, so fan-out is observable. */
 class FakeRepo implements NotificationRepository {
-  rows: NotificationView[] = [];
+  rows: Array<NotificationView & { userId: string }> = [];
+  peers: string[] = [];
+  admins: string[] = [];
+  names = new Map<string, string>();
+  prefs = new Map<string, NotificationPreferences>();
   private seq = 0;
 
   async create(input: CreateNotificationInput): Promise<NotificationView> {
-    const row: NotificationView = {
+    const row = {
       id: `n-${this.seq++}`,
+      userId: input.userId,
       type: input.type,
       title: input.title,
       body: input.body,
@@ -19,15 +25,49 @@ class FakeRepo implements NotificationRepository {
     this.rows.unshift(row);
     return row;
   }
-  async list(_userId: string, limit: number): Promise<NotificationView[]> {
-    return this.rows.slice(0, limit);
+  async createMany(inputs: CreateNotificationInput[]): Promise<NotificationView[]> {
+    return Promise.all(inputs.map((input) => this.create(input)));
   }
-  async unreadCount(): Promise<number> {
-    return this.rows.filter((r) => !r.read).length;
+  async list(userId: string, limit: number): Promise<NotificationView[]> {
+    return this.rows.filter((r) => r.userId === userId).slice(0, limit);
   }
-  async markRead(_userId: string, ids: string[] | null): Promise<number> {
-    for (const r of this.rows) if (ids === null || ids.includes(r.id)) r.read = true;
-    return this.rows.filter((r) => !r.read).length;
+  async unreadCount(userId: string): Promise<number> {
+    return this.rows.filter((r) => r.userId === userId && !r.read).length;
+  }
+  async markRead(userId: string, ids: string[] | null): Promise<number> {
+    for (const r of this.rows) {
+      if (r.userId === userId && (ids === null || ids.includes(r.id))) r.read = true;
+    }
+    return this.rows.filter((r) => r.userId === userId && !r.read).length;
+  }
+  async listPeerRecipients(exceptUserId: string, pref: PeerPreference): Promise<string[]> {
+    return this.peers.filter((id) => id !== exceptUserId && (this.prefs.get(id)?.[pref] ?? true));
+  }
+  async listAdmins(): Promise<string[]> {
+    return this.admins;
+  }
+  async wants(userId: string, pref: PeerPreference): Promise<boolean> {
+    return this.prefs.get(userId)?.[pref] ?? true;
+  }
+  async displayName(userId: string): Promise<string | null> {
+    return this.names.get(userId) ?? null;
+  }
+  async getPreferences(userId: string): Promise<NotificationPreferences> {
+    return (
+      this.prefs.get(userId) ?? {
+        notifyPeerSuccess: true,
+        notifyOvertaken: true,
+        emailMilestones: true,
+      }
+    );
+  }
+  async updatePreferences(
+    userId: string,
+    patch: Partial<NotificationPreferences>,
+  ): Promise<NotificationPreferences> {
+    const next = { ...(await this.getPreferences(userId)), ...patch };
+    this.prefs.set(userId, next);
+    return next;
   }
 }
 
@@ -89,6 +129,71 @@ describe('NotificationService', () => {
     await expect(
       service.onAchievementUnlocked({ userId: 'u', slug: 's', title: 'A', xpReward: 0 }),
     ).resolves.toBeUndefined();
-    expect(repo.rows).toHaveLength(1);
+    // The actor's own notification + a peer fan-out to whoever is subscribed.
+    expect(repo.rows.filter((r) => r.userId === 'u')).toHaveLength(1);
+  });
+});
+
+describe('NotificationService peer fan-out (M10)', () => {
+  it('tells the circle when someone succeeds, minus the actor', async () => {
+    const repo = new FakeRepo();
+    repo.peers = ['actor', 'bob', 'carol'];
+    repo.names.set('actor', 'Alice');
+    const service = new NotificationService({ repo });
+
+    await service.onAttemptGraded({
+      userId: 'actor', attemptId: 'a', assessmentId: 'as', lessonId: 'l', passed: true, scorePct: 90,
+    });
+
+    const peerRows = repo.rows.filter((r) => r.type === 'PEER_SUCCESS');
+    expect(peerRows.map((r) => r.userId).sort()).toEqual(['bob', 'carol']);
+    expect(peerRows[0]!.title).toContain('Alice');
+  });
+
+  it('does not fan out a failed quiz', async () => {
+    const repo = new FakeRepo();
+    repo.peers = ['actor', 'bob'];
+    const service = new NotificationService({ repo });
+
+    await service.onAttemptGraded({
+      userId: 'actor', attemptId: 'a', assessmentId: 'as', lessonId: 'l', passed: false, scorePct: 10,
+    });
+
+    expect(repo.rows.filter((r) => r.type === 'PEER_SUCCESS')).toHaveLength(0);
+  });
+
+  it('respects a peer who muted others’ wins', async () => {
+    const repo = new FakeRepo();
+    repo.peers = ['actor', 'bob', 'muted'];
+    repo.prefs.set('muted', { notifyPeerSuccess: false, notifyOvertaken: true, emailMilestones: true });
+    const service = new NotificationService({ repo });
+
+    await service.onAchievementUnlocked({ userId: 'actor', slug: 's', title: 'Streak', xpReward: 0 });
+
+    const peers = repo.rows.filter((r) => r.type === 'PEER_SUCCESS').map((r) => r.userId);
+    expect(peers).toEqual(['bob']);
+  });
+
+  it('only notifies an overtaken user who wants it', async () => {
+    const repo = new FakeRepo();
+    repo.prefs.set('loser', { notifyPeerSuccess: true, notifyOvertaken: false, emailMilestones: true });
+    const service = new NotificationService({ repo });
+
+    await service.onLeaderboardOvertaken({ overtakenUserId: 'loser', byUserId: 'winner', byDisplayName: 'Win', newRank: 2 });
+
+    expect(repo.rows.filter((r) => r.type === 'OVERTAKEN')).toHaveLength(0);
+  });
+
+  it('notifies admins of a new suggestion', async () => {
+    const repo = new FakeRepo();
+    repo.admins = ['admin1', 'admin2'];
+    const service = new NotificationService({ repo });
+
+    await service.onSuggestionSubmitted({ suggestionId: 's', userId: 'stu', authorName: 'Sam', kind: 'IDEA' });
+
+    expect(repo.rows.filter((r) => r.type === 'SUGGESTION_SUBMITTED').map((r) => r.userId).sort()).toEqual([
+      'admin1',
+      'admin2',
+    ]);
   });
 });

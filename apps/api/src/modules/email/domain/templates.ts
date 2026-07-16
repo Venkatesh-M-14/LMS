@@ -60,6 +60,20 @@ const TEMPLATES: Record<string, Renderer> = {
       ),
     };
   },
+  /** Sent to the rest of the circle when a member hits a milestone (M10). */
+  'peer-milestone': (p, web) => {
+    const who = esc(p.actorName);
+    const scope = p.scope === 'PATH' ? 'the whole learning path' : `the module "${esc(p.scopeTitle)}"`;
+    return {
+      subject: `${who} just completed ${p.scope === 'PATH' ? 'the learning path' : esc(p.scopeTitle)}`,
+      text: `${who} completed ${scope}. See where everyone is up to: ${web}/leaderboard`,
+      html: layout(
+        `${who} hit a milestone 🎉`,
+        `<p><strong>${who}</strong> just completed ${scope}. Your circle is moving — see where everyone is up to.</p>`,
+        { label: 'View the leaderboard', url: `${web}/leaderboard` },
+      ),
+    };
+  },
   'project-reviewed': (p, web) => {
     const approved = p.decision === 'APPROVED';
     const title = esc(p.briefTitle);

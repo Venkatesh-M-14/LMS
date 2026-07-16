@@ -1,9 +1,24 @@
-import type { NotificationListView } from '@academy/shared';
+import type {
+  NotificationListView,
+  NotificationPreferences,
+  UpdateNotificationPreferencesRequest,
+} from '@academy/shared';
 import { apiRequest } from '../../shared/api/client';
 
 export const notificationKeys = {
   list: ['notifications', 'list'] as const,
+  preferences: ['notifications', 'preferences'] as const,
 };
+
+export function fetchNotificationPreferences(): Promise<NotificationPreferences> {
+  return apiRequest('/notifications/preferences');
+}
+
+export function updateNotificationPreferences(
+  patch: UpdateNotificationPreferencesRequest,
+): Promise<NotificationPreferences> {
+  return apiRequest('/notifications/preferences', { method: 'PATCH', body: patch });
+}
 
 export function fetchNotifications(): Promise<NotificationListView> {
   return apiRequest('/notifications');

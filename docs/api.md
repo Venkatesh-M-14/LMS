@@ -173,6 +173,37 @@ Grounding uses only currently-published lesson content — never hidden tests, a
 
 Failing a quiz assigns a `RevisionAssignment` per weak (missed skill-tagged) item, targeting the failed lesson. While one is open and blocking, starting a new attempt returns `REVISION_REQUIRED` 409 (its `details` list the lessons to review); opening the target lesson completes the assignment and unblocks the retake.
 
+## Chat _(Bearer token)_
+
+| Endpoint                                     | Purpose                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET /chat/channels`                         | The caller's channels (group + lesson threads + their DMs) with unread counts |
+| `GET /chat/peers`                            | Circle members you can start a DM with                                     |
+| `GET /chat/channels/group`                   | The circle-wide room (created on first use)                                |
+| `GET /chat/channels/lesson/:lessonId`        | A lesson's discussion thread (created on first use)                        |
+| `POST /chat/channels/direct` `{ userId }`    | Get-or-create the DM with a member                                         |
+| `GET /chat/channels/:id/messages?before=`    | Cursor-paginated history (newest page first)                               |
+| `POST /chat/channels/:id/messages` `{ body }`| Post a message (1–2000 chars); DMs are gated to their members             |
+| `POST /chat/channels/:id/read`               | Mark the channel read                                                      |
+
+New messages push over Socket.IO (`chat:message` → `{ channelId, message }`) to each recipient's user room.
+
+## Suggestions
+
+| Endpoint                                      | Purpose                                                                                  |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET /suggestions` _(any user)_               | The caller's own suggestions and their status                                            |
+| `POST /suggestions` _(any user)_              | Submit `{ kind: 'IDEA', body }` or `{ kind: 'DRAFT_QUESTION', lessonId, draft }` (draft reuses the item-authoring contract) |
+| `GET /cms/suggestions?status=` _(ADMIN)_      | Review queue (PENDING first)                                                              |
+| `POST /cms/suggestions/:id/review` _(ADMIN)_  | `{ decision: 'ACCEPT' \| 'REJECT', adminNote? }` — accepting a draft appends it to the lesson's quiz (`CONFLICT` 409 if already reviewed) |
+
+## Notification preferences _(Bearer token)_
+
+| Endpoint                        | Purpose                                                          |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `GET /notifications/preferences`   | `{ notifyPeerSuccess, notifyOvertaken, emailMilestones }`     |
+| `PATCH /notifications/preferences` | Toggle any of the above (peer chatter is opt-out per user)    |
+
 ## Notifications _(Bearer token)_
 
 | Endpoint                   | Purpose                                                                       |

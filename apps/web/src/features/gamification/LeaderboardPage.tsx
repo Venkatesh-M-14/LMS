@@ -6,6 +6,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import LinearProgress from '@mui/material/LinearProgress';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -24,6 +25,8 @@ function medal(rank: number): string {
 
 function Row({ entry }: { entry: LeaderboardEntry }) {
   const { t } = useTranslation();
+  const pct =
+    entry.totalLessons > 0 ? Math.round((entry.lessonsCompleted / entry.totalLessons) * 100) : 0;
   return (
     <TableRow selected={entry.isCurrentUser} hover>
       <TableCell
@@ -36,6 +39,21 @@ function Row({ entry }: { entry: LeaderboardEntry }) {
         {entry.isCurrentUser ? (
           <Chip size="small" color="primary" label={t('gamification.you')} sx={{ ml: 1 }} />
         ) : null}
+        {entry.currentTopicTitle ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {t('gamification.onTopic', { topic: entry.currentTopicTitle })}
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell sx={{ minWidth: 140 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flexGrow: 1 }}>
+            <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 3 }} />
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+            {entry.lessonsCompleted}/{entry.totalLessons}
+          </Typography>
+        </Stack>
       </TableCell>
       <TableCell align="right">
         {t('gamification.level')} {entry.level}
@@ -87,6 +105,7 @@ export function LeaderboardPage() {
               <TableRow>
                 <TableCell>{t('gamification.rank')}</TableCell>
                 <TableCell>{t('gamification.learner')}</TableCell>
+                <TableCell>{t('gamification.progress')}</TableCell>
                 <TableCell align="right">{t('gamification.level')}</TableCell>
                 <TableCell align="right">{t('gamification.xp')}</TableCell>
               </TableRow>
@@ -98,7 +117,7 @@ export function LeaderboardPage() {
               {showCurrentSeparately ? (
                 <>
                   <TableRow>
-                    <TableCell colSpan={4} sx={{ p: 0 }}>
+                    <TableCell colSpan={5} sx={{ p: 0 }}>
                       <Divider />
                     </TableCell>
                   </TableRow>

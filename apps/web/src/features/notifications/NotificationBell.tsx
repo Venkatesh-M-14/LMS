@@ -17,6 +17,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { NotificationView } from '@academy/shared';
 import { useTranslation } from 'react-i18next';
 import { fetchNotifications, markNotificationsRead, notificationKeys } from './api';
+import { NotificationSettings } from './NotificationSettings';
 
 function relativeTime(iso: string, locale: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -125,6 +126,8 @@ export function NotificationBell() {
             ))}
           </List>
         )}
+        <Divider />
+        <NotificationSettings />
       </Menu>
     </>
   );

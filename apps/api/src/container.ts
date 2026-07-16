@@ -70,6 +70,15 @@ import { BullEmailQueue } from './modules/email/infrastructure/emailQueue';
 import { AnalyticsService } from './modules/analytics/application/analyticsService';
 import { PrismaAnalyticsRepository } from './modules/analytics/infrastructure/prismaAnalyticsRepository';
 import { buildAnalyticsRouter } from './modules/analytics/http/analyticsRouter';
+import { ChatService } from './modules/chat/application/chatService';
+import { PrismaChatRepository } from './modules/chat/infrastructure/prismaChatRepository';
+import { buildChatRouter } from './modules/chat/http/chatRouter';
+import { SuggestionService } from './modules/suggestions/application/suggestionService';
+import { PrismaSuggestionRepository } from './modules/suggestions/infrastructure/prismaSuggestionRepository';
+import {
+  buildCmsSuggestionsRouter,
+  buildSuggestionsRouter,
+} from './modules/suggestions/http/suggestionsRouter';
 import { ProjectService } from './modules/projects/application/projectService';
 import { PrismaProjectRepository } from './modules/projects/infrastructure/prismaProjectRepository';
 import {
@@ -100,6 +109,9 @@ export interface Container {
     adaptive: Router;
     notifications: Router;
     analytics: Router;
+    chat: Router;
+    suggestions: Router;
+    cmsSuggestions: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   eventBus: EventBus;
@@ -107,6 +119,7 @@ export interface Container {
   judgeQueue: BullJudgeQueue;
   notificationService: NotificationService;
   emailService: EmailService;
+  chatService: ChatService;
   tokenVerifier: JwtTokenServiceType;
   shutdown(): Promise<void>;
 }
@@ -194,6 +207,10 @@ export async function buildContainer(env: Env): Promise<Container> {
   eventBus.on('CertificateIssued', (event) => notificationService.onCertificateIssued(event));
   eventBus.on('ProjectReviewed', (event) => notificationService.onProjectReviewed(event));
   eventBus.on('RevisionAssigned', (event) => notificationService.onRevisionAssigned(event));
+  // M10: the circle hears about each other.
+  eventBus.on('LeaderboardOvertaken', (event) => notificationService.onLeaderboardOvertaken(event));
+  eventBus.on('SuggestionSubmitted', (event) => notificationService.onSuggestionSubmitted(event));
+  eventBus.on('SuggestionReviewed', (event) => notificationService.onSuggestionReviewed(event));
 
   // Email outbox: subscribers write PENDING rows; a BullMQ worker (server.ts)
   // drains them. No SMTP configured → the worker no-ops, so nothing blocks.
@@ -225,6 +242,9 @@ export async function buildContainer(env: Env): Promise<Container> {
   });
   eventBus.on('AttemptGraded', (event) => analyticsService.onAttemptGraded(event));
 
+  // Chat: one channel model behind the group room, DMs and lesson threads.
+  const chatService = new ChatService({ repo: new PrismaChatRepository(prisma), logger });
+
   // AI Mentor provider: real Anthropic when a key is present, deterministic
   // fake when explicitly selected (dev/CI), else an unconfigured placeholder.
   let mentorProvider: LlmProvider;
@@ -244,6 +264,15 @@ export async function buildContainer(env: Env): Promise<Container> {
   });
 
   const assessmentRepo = new PrismaAssessmentRepository(prisma);
+
+  // Syllabus suggestions: accepting a draft appends it to the lesson's bank,
+  // so it needs the assessment repository above.
+  const suggestionService = new SuggestionService({
+    repo: new PrismaSuggestionRepository(prisma),
+    assessments: assessmentRepo,
+    events: eventBus,
+    logger,
+  });
   const attemptRepo = new PrismaAttemptRepository(prisma);
   const gradingRepo = new PrismaGradingRepository(prisma);
   const judgeQueue = new BullJudgeQueue(env.REDIS_URL);
@@ -337,6 +366,9 @@ export async function buildContainer(env: Env): Promise<Container> {
       adaptive: buildAdaptiveRouter({ adaptive: adaptiveService, authenticate }),
       notifications: buildNotificationRouter({ notifications: notificationService, authenticate }),
       analytics: buildAnalyticsRouter({ analytics: analyticsService, authenticate }),
+      chat: buildChatRouter({ chat: chatService, authenticate }),
+      suggestions: buildSuggestionsRouter({ suggestions: suggestionService, authenticate }),
+      cmsSuggestions: buildCmsSuggestionsRouter({ suggestions: suggestionService, authenticate }),
     },
     globalRateLimiter,
     eventBus,
@@ -344,6 +376,7 @@ export async function buildContainer(env: Env): Promise<Container> {
     judgeQueue,
     notificationService,
     emailService,
+    chatService,
     tokenVerifier: jwtService,
     async shutdown() {
       await judgeQueue.close();

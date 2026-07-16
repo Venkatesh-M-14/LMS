@@ -65,6 +65,29 @@ export interface DomainEvents {
     targetLessonId: string;
     targetLessonTitle: string;
   };
+  /** Someone climbed past a peer on the leaderboard (M10). One event per
+   * passed peer; the overtaken user is notified if they haven't opted out. */
+  LeaderboardOvertaken: {
+    overtakenUserId: string;
+    byUserId: string;
+    byDisplayName: string;
+    newRank: number;
+  };
+  /** A student proposed an idea or draft question (M10) — notifies admins. */
+  SuggestionSubmitted: {
+    suggestionId: string;
+    userId: string;
+    authorName: string;
+    kind: 'IDEA' | 'DRAFT_QUESTION';
+  };
+  /** An admin accepted or rejected a suggestion (M10) — notifies the author. */
+  SuggestionReviewed: {
+    suggestionId: string;
+    userId: string;
+    accepted: boolean;
+    /** Set when an accepted draft became a real question. */
+    createdItemId: string | null;
+  };
 }
 
 type Handler<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => Promise<void> | void;

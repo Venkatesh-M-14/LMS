@@ -23,6 +23,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import LeaderboardIcon from '@mui/icons-material/Leaderboard';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import Divider from '@mui/material/Divider';
 import { useTranslation } from 'react-i18next';
 import { StatsBadge } from '../../features/gamification/components/StatsBadge';
@@ -107,6 +108,9 @@ export function AppLayout() {
             <Button component={RouterLink} to="/mentor" color="inherit" size="small">
               {t('nav.mentor')}
             </Button>
+            <Button component={RouterLink} to="/chat" color="inherit" size="small">
+              {t('nav.chat')}
+            </Button>
             {user && (user.role === 'INSTRUCTOR' || user.role === 'ADMIN') ? (
               <>
                 <Button component={RouterLink} to="/instructor" color="inherit" size="small">
@@ -136,6 +140,16 @@ export function AppLayout() {
                 >
                   {t('nav.analytics')}
                 </Button>
+                {user.role === 'ADMIN' ? (
+                  <Button
+                    component={RouterLink}
+                    to="/instructor/suggestions"
+                    color="inherit"
+                    size="small"
+                  >
+                    {t('nav.suggestions')}
+                  </Button>
+                ) : null}
               </>
             ) : null}
           </Box>
@@ -227,6 +241,12 @@ export function AppLayout() {
                 <WorkspacePremiumIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>{t('nav.certificates')}</ListItemText>
+            </MenuItem>
+            <MenuItem component={RouterLink} to="/suggestions" onClick={() => setUserAnchor(null)}>
+              <ListItemIcon>
+                <LightbulbIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('nav.suggestQuestion')}</ListItemText>
             </MenuItem>
             <Divider />
             <MenuItem onClick={() => void handleLogout()}>

@@ -71,4 +71,22 @@ export class PrismaEmailRepository implements EmailOutboxRepository {
     });
     return user?.email ?? null;
   }
+
+  async getUserDisplayName(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    return user?.displayName ?? null;
+  }
+
+  async listMilestoneRecipients(
+    exceptUserId: string,
+  ): Promise<Array<{ userId: string; email: string }>> {
+    const users = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE', id: { not: exceptUserId }, emailMilestones: true },
+      select: { id: true, email: true },
+    });
+    return users.map((u) => ({ userId: u.id, email: u.email }));
+  }
 }

@@ -9,6 +9,7 @@ import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
 import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
@@ -186,8 +187,8 @@ export function CurriculumPage() {
                             const lessonProgress = progress?.lessons[lesson.id];
                             const locked = lessonProgress?.status === 'LOCKED';
                             return (
+                              <ListItem key={lesson.id} disablePadding>
                               <ListItemButton
-                                key={lesson.id}
                                 component={RouterLink}
                                 to={`/lessons/${lesson.id}`}
                                 disabled={locked}
@@ -211,6 +212,7 @@ export function CurriculumPage() {
                                   </Typography>
                                 ) : null}
                               </ListItemButton>
+                              </ListItem>
                             );
                           })}
                         </List>

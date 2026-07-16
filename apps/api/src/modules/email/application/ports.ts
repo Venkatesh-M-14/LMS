@@ -27,6 +27,15 @@ export interface EmailOutboxRepository {
   findResumable(limit: number): Promise<string[]>;
   /** Recipient address for a user, or null if the account is gone. */
   getUserEmail(userId: string): Promise<string | null>;
+  /** Display name for the actor of a milestone, used in peer email copy. */
+  getUserDisplayName(userId: string): Promise<string | null>;
+  /**
+   * The circle minus the actor, limited to members who still want milestone
+   * email. Email is reserved for milestones — everything else stays in-app.
+   */
+  listMilestoneRecipients(
+    exceptUserId: string,
+  ): Promise<Array<{ userId: string; email: string }>>;
 }
 
 /** The transport seam: real SMTP (nodemailer) or a null sender when unconfigured. */

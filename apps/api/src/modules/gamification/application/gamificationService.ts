@@ -14,6 +14,9 @@ import { earnedSlugs, ACHIEVEMENT_RULES } from '../domain/achievements';
 import { localDate } from '../domain/streak';
 import type { AwardInput, GamificationRepository, Leaderboard, XpReason } from './ports';
 
+/** A single climb can pass many people; cap the notifications it fans out. */
+const OVERTAKE_NOTIFY_CAP = 10;
+
 /** XP awarded per event type. Achievement rewards come from their own rules. */
 const XP_VALUES = {
   LESSON_COMPLETED: 20,
@@ -43,26 +46,44 @@ export class GamificationService {
     scorePct: number;
   }): Promise<void> {
     if (!event.passed) return;
-    // Deterministic keys: replays (retries, re-grades) never double-award.
-    await this.award({
-      userId: event.userId,
-      amount: XP_VALUES.QUIZ_PASSED,
-      reason: 'QUIZ_PASSED',
-      idempotencyKey: `quiz-passed:${event.userId}:${event.assessmentId}`,
-      refType: 'assessment',
-      refId: event.assessmentId,
-    });
-    if (event.scorePct >= 100) {
+    await this.withOvertakeDetection(event.userId, async () => {
+      // Deterministic keys: replays (retries, re-grades) never double-award.
       await this.award({
         userId: event.userId,
-        amount: XP_VALUES.QUIZ_PASSED_FIRST_TRY,
-        reason: 'QUIZ_PASSED_FIRST_TRY',
-        idempotencyKey: `quiz-perfect:${event.userId}:${event.assessmentId}`,
+        amount: XP_VALUES.QUIZ_PASSED,
+        reason: 'QUIZ_PASSED',
+        idempotencyKey: `quiz-passed:${event.userId}:${event.assessmentId}`,
         refType: 'assessment',
         refId: event.assessmentId,
       });
-    }
-    if (event.lessonId) {
+      if (event.scorePct >= 100) {
+        await this.award({
+          userId: event.userId,
+          amount: XP_VALUES.QUIZ_PASSED_FIRST_TRY,
+          reason: 'QUIZ_PASSED_FIRST_TRY',
+          idempotencyKey: `quiz-perfect:${event.userId}:${event.assessmentId}`,
+          refType: 'assessment',
+          refId: event.assessmentId,
+        });
+      }
+      if (event.lessonId) {
+        await this.award({
+          userId: event.userId,
+          amount: XP_VALUES.LESSON_COMPLETED,
+          reason: 'LESSON_COMPLETED',
+          idempotencyKey: `lesson:${event.userId}:${event.lessonId}`,
+          refType: 'lesson',
+          refId: event.lessonId,
+        });
+      }
+      await this.syncAchievements(event.userId);
+    });
+    await this.maybeIssueCertificates(event.userId);
+  }
+
+  /** Quizless lesson manually completed — award lesson XP and check certs. */
+  async onLessonCompleted(event: { userId: string; lessonId: string }): Promise<void> {
+    await this.withOvertakeDetection(event.userId, async () => {
       await this.award({
         userId: event.userId,
         amount: XP_VALUES.LESSON_COMPLETED,
@@ -71,22 +92,8 @@ export class GamificationService {
         refType: 'lesson',
         refId: event.lessonId,
       });
-    }
-    await this.syncAchievements(event.userId);
-    await this.maybeIssueCertificates(event.userId);
-  }
-
-  /** Quizless lesson manually completed — award lesson XP and check certs. */
-  async onLessonCompleted(event: { userId: string; lessonId: string }): Promise<void> {
-    await this.award({
-      userId: event.userId,
-      amount: XP_VALUES.LESSON_COMPLETED,
-      reason: 'LESSON_COMPLETED',
-      idempotencyKey: `lesson:${event.userId}:${event.lessonId}`,
-      refType: 'lesson',
-      refId: event.lessonId,
+      await this.syncAchievements(event.userId);
     });
-    await this.syncAchievements(event.userId);
     await this.maybeIssueCertificates(event.userId);
   }
 
@@ -95,15 +102,54 @@ export class GamificationService {
     briefId: string;
     topicId: string;
   }): Promise<void> {
-    await this.award({
-      userId: event.userId,
-      amount: XP_VALUES.PROJECT_APPROVED,
-      reason: 'PROJECT_APPROVED',
-      idempotencyKey: `project:${event.userId}:${event.briefId}`,
-      refType: 'brief',
-      refId: event.briefId,
+    await this.withOvertakeDetection(event.userId, async () => {
+      await this.award({
+        userId: event.userId,
+        amount: XP_VALUES.PROJECT_APPROVED,
+        reason: 'PROJECT_APPROVED',
+        idempotencyKey: `project:${event.userId}:${event.briefId}`,
+        refType: 'brief',
+        refId: event.briefId,
+      });
+      await this.syncAchievements(event.userId);
     });
-    await this.syncAchievements(event.userId);
+  }
+
+  // ── Overtake detection ──────────────────────────────────────────────────────
+
+  /**
+   * Wraps a batch of awards and reports who the user climbed past. Rank is read
+   * once before and once after the whole batch, so one quiz that grants several
+   * XP entries still produces a single set of overtake events rather than one
+   * per award. Ranks are 1-based and lower is better.
+   */
+  private async withOvertakeDetection(userId: string, apply: () => Promise<void>): Promise<void> {
+    const events = this.deps.events;
+    if (!events) {
+      await apply();
+      return;
+    }
+    const before = await this.deps.leaderboard.rankOf(userId);
+    await apply();
+    const after = await this.deps.leaderboard.rankOf(userId);
+    if (before === null || after === null || after >= before) return;
+
+    // Everyone previously ranked [after, before-1] is now one place lower.
+    const passed = (await this.deps.leaderboard.rangeByRank(after + 1, before)).filter(
+      (id) => id !== userId,
+    );
+    if (passed.length === 0) return;
+
+    const [me] = await this.deps.repo.getLeaderboardSlice([userId]);
+    const byDisplayName = me?.displayName ?? 'Someone';
+    for (const overtakenUserId of passed.slice(0, OVERTAKE_NOTIFY_CAP)) {
+      await events.emit('LeaderboardOvertaken', {
+        overtakenUserId,
+        byUserId: userId,
+        byDisplayName,
+        newRank: after,
+      });
+    }
   }
 
   // ── Core award ──────────────────────────────────────────────────────────────

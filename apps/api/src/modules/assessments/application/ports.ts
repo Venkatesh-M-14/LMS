@@ -38,6 +38,11 @@ export interface AssessmentRepository {
   getAuthoringView(lessonId: string): Promise<AssessmentAuthoringView | null>;
   upsertForLesson(lessonId: string, settings: UpsertAssessmentRequest): Promise<AssessmentRecord>;
   replaceItems(assessmentId: string, items: AuthoringItemInput[]): Promise<void>;
+  /**
+   * Appends one item at the end of the bank without disturbing the others —
+   * how an accepted student draft (M10) joins the quiz.
+   */
+  appendItem(assessmentId: string, item: AuthoringItemInput): Promise<{ id: string }>;
   /** currentPublishedVersionId of the lesson the assessment hangs off (pin). */
   getLessonPublishedVersionId(lessonId: string): Promise<string | null>;
   /**

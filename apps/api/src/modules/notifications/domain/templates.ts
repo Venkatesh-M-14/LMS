@@ -84,3 +84,62 @@ export function revisionAssignedNotification(
     linkUrl: `/lessons/${event.targetLessonId}`,
   };
 }
+
+// ── The circle (M10) ─────────────────────────────────────────────────────────
+
+/** What the rest of the circle sees when someone succeeds. */
+export function peerSuccessNotification(input: {
+  actorName: string;
+  achievement: string;
+  linkUrl: string | null;
+}): NotificationContent {
+  return {
+    type: 'PEER_SUCCESS',
+    title: `${input.actorName} ${input.achievement}`,
+    body: 'Your circle is making progress — see where everyone is up to.',
+    linkUrl: input.linkUrl ?? '/leaderboard',
+  };
+}
+
+export function overtakenNotification(
+  event: DomainEvents['LeaderboardOvertaken'],
+): NotificationContent {
+  return {
+    type: 'OVERTAKEN',
+    title: `${event.byDisplayName} just passed you`,
+    body: `They're now #${event.newRank} on the leaderboard. Your move.`,
+    linkUrl: '/leaderboard',
+  };
+}
+
+export function suggestionSubmittedNotification(
+  event: DomainEvents['SuggestionSubmitted'],
+): NotificationContent {
+  const what = event.kind === 'DRAFT_QUESTION' ? 'a draft question' : 'a syllabus idea';
+  return {
+    type: 'SUGGESTION_SUBMITTED',
+    title: 'New syllabus suggestion',
+    body: `${event.authorName} submitted ${what} for review.`,
+    linkUrl: '/instructor/suggestions',
+  };
+}
+
+export function suggestionReviewedNotification(
+  event: DomainEvents['SuggestionReviewed'],
+): NotificationContent {
+  return event.accepted
+    ? {
+        type: 'SUGGESTION_REVIEWED',
+        title: 'Your suggestion was accepted 🎉',
+        body: event.createdItemId
+          ? 'Your draft question is now part of the syllabus.'
+          : 'Thanks — your idea has been accepted.',
+        linkUrl: '/suggestions',
+      }
+    : {
+        type: 'SUGGESTION_REVIEWED',
+        title: 'Your suggestion was reviewed',
+        body: 'It was not accepted this time — open it to see the reviewer’s note.',
+        linkUrl: '/suggestions',
+      };
+}

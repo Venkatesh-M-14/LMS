@@ -27,6 +27,13 @@ async function main(): Promise<void> {
   container.notificationService.setPusher({
     push: (userId, payload) => io.to(`user:${userId}`).emit('notification:new', payload),
   });
+  // Chat: deliver to each recipient's own room — a DM can only reach its two
+  // members, so there's no channel-room authorization to get wrong.
+  container.chatService.setPusher({
+    push: (recipientIds, payload) => {
+      for (const userId of recipientIds) io.to(`user:${userId}`).emit('chat:message', payload);
+    },
+  });
 
   // Email outbox drain worker; recover any rows stranded before this boot.
   const emailWorker = startEmailWorker(env.REDIS_URL, container.emailService, container.logger);

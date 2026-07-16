@@ -35,6 +35,14 @@ export function useRealtime(): void {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
+    // A chat message landed — refresh that channel's transcript + the sidebar.
+    socket.on('chat:message', (event: { channelId?: string }) => {
+      if (event?.channelId) {
+        void queryClient.invalidateQueries({ queryKey: ['chat', 'messages', event.channelId] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['chat', 'channels'] });
+    });
+
     return () => {
       socket?.disconnect();
       socket = null;

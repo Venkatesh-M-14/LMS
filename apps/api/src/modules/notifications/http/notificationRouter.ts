@@ -1,5 +1,8 @@
 import { Router, type RequestHandler } from 'express';
-import { markNotificationsReadRequestSchema } from '@academy/shared';
+import {
+  markNotificationsReadRequestSchema,
+  updateNotificationPreferencesRequestSchema,
+} from '@academy/shared';
 import { asyncHandler } from '../../../core/http/asyncHandler';
 import { ok } from '../../../core/http/respond';
 import { validate } from '../../../core/http/validate';
@@ -27,6 +30,22 @@ export function buildNotificationRouter(deps: NotificationRouterDeps): Router {
     validate({ body: markNotificationsReadRequestSchema }),
     asyncHandler(async (req, res) => {
       ok(res, await deps.notifications.markRead(req.user!.id, req.body.ids ?? null));
+    }),
+  );
+
+  // Peer chatter is opt-out per user; your own results always notify you.
+  router.get(
+    '/preferences',
+    asyncHandler(async (req, res) => {
+      ok(res, await deps.notifications.getPreferences(req.user!.id));
+    }),
+  );
+
+  router.patch(
+    '/preferences',
+    validate({ body: updateNotificationPreferencesRequestSchema }),
+    asyncHandler(async (req, res) => {
+      ok(res, await deps.notifications.updatePreferences(req.user!.id, req.body));
     }),
   );
 

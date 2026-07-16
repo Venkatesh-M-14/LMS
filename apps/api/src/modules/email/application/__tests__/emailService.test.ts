@@ -4,6 +4,9 @@ import type { EmailOutboxRepository, EmailQueuePort, EmailSender, EnqueueEmailIn
 class FakeRepo implements EmailOutboxRepository {
   rows = new Map<string, OutboxRow & { lastError?: string }>();
   emails = new Map<string, string>([['u1', 'u1@example.com']]);
+  names = new Map<string, string>([['u1', 'Sam']]);
+  /** The circle that still wants milestone email. */
+  milestonePeers: Array<{ userId: string; email: string }> = [];
   private seq = 0;
 
   async enqueue(input: EnqueueEmailInput): Promise<{ id: string }> {
@@ -40,6 +43,12 @@ class FakeRepo implements EmailOutboxRepository {
   }
   async getUserEmail(userId: string) {
     return this.emails.get(userId) ?? null;
+  }
+  async getUserDisplayName(userId: string) {
+    return this.names.get(userId) ?? null;
+  }
+  async listMilestoneRecipients(exceptUserId: string) {
+    return this.milestonePeers.filter((p) => p.userId !== exceptUserId);
   }
 }
 

@@ -10,6 +10,11 @@ export const NOTIFICATION_TYPES = [
   'PROJECT_REVIEWED',
   'REVISION_ASSIGNED',
   'LESSON_UNLOCKED',
+  // M10 — the circle sees each other's wins and rank changes.
+  'PEER_SUCCESS',
+  'OVERTAKEN',
+  'SUGGESTION_SUBMITTED',
+  'SUGGESTION_REVIEWED',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -41,3 +46,24 @@ export interface NotificationPushEvent {
   notification: NotificationView;
   unreadCount: number;
 }
+
+// ── Preferences (M10) ────────────────────────────────────────────────────────
+
+/** Peer chatter is opt-out: your own results always notify you. */
+export interface NotificationPreferences {
+  /** In-app notifications when someone else in the circle succeeds. */
+  notifyPeerSuccess: boolean;
+  /** In-app notification when a peer overtakes you on the leaderboard. */
+  notifyOvertaken: boolean;
+  /** Email for milestones (a peer's certificate, your own certificate). */
+  emailMilestones: boolean;
+}
+
+export const updateNotificationPreferencesRequestSchema = z.object({
+  notifyPeerSuccess: z.boolean().optional(),
+  notifyOvertaken: z.boolean().optional(),
+  emailMilestones: z.boolean().optional(),
+});
+export type UpdateNotificationPreferencesRequest = z.infer<
+  typeof updateNotificationPreferencesRequestSchema
+>;

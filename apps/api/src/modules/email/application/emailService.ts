@@ -36,20 +36,41 @@ export class EmailService {
     });
   }
 
+  /**
+   * A certificate is the milestone we email about: the achiever gets theirs,
+   * and the circle is told — this is the only peer email, deliberately. Every
+   * other peer success stays in-app so inboxes remain usable.
+   */
   async onCertificateIssued(event: DomainEvents['CertificateIssued']): Promise<void> {
     const toEmail = await this.emailFor(event.userId);
-    if (!toEmail) return;
-    await this.enqueue({
-      userId: event.userId,
-      toEmail,
-      subject: `Your certificate for "${event.scopeTitle}" is ready`,
-      template: 'certificate-issued',
-      payload: {
-        scope: event.scope,
-        scopeTitle: event.scopeTitle,
-        verificationCode: event.verificationCode,
-      },
-    });
+    if (toEmail) {
+      await this.enqueue({
+        userId: event.userId,
+        toEmail,
+        subject: `Your certificate for "${event.scopeTitle}" is ready`,
+        template: 'certificate-issued',
+        payload: {
+          scope: event.scope,
+          scopeTitle: event.scopeTitle,
+          verificationCode: event.verificationCode,
+        },
+      });
+    }
+
+    const [peers, actorName] = await Promise.all([
+      this.deps.repo.listMilestoneRecipients(event.userId),
+      this.deps.repo.getUserDisplayName(event.userId),
+    ]);
+    const who = actorName ?? 'A member';
+    for (const peer of peers) {
+      await this.enqueue({
+        userId: peer.userId,
+        toEmail: peer.email,
+        subject: `${who} just completed ${event.scope === 'PATH' ? 'the learning path' : event.scopeTitle}`,
+        template: 'peer-milestone',
+        payload: { actorName: who, scope: event.scope, scopeTitle: event.scopeTitle },
+      });
+    }
   }
 
   async onProjectReviewed(event: DomainEvents['ProjectReviewed']): Promise<void> {

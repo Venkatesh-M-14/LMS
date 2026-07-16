@@ -29,6 +29,11 @@ export interface LeaderboardEntry {
   totalXp: number;
   level: number;
   isCurrentUser: boolean;
+  /** Curriculum progress, so the circle sees more than a score (M10). */
+  lessonsCompleted: number;
+  totalLessons: number;
+  /** The topic they're working through now, or null before they start. */
+  currentTopicTitle: string | null;
 }
 
 export interface LeaderboardView {

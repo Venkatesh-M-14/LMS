@@ -52,9 +52,7 @@ export interface GamificationRepository {
 
   // Leaderboard (Postgres source of truth; Redis is the fast index).
   getAllStatsForRebuild(): Promise<Array<{ userId: string; totalXp: number }>>;
-  getLeaderboardSlice(
-    userIds: string[],
-  ): Promise<Array<{ userId: string; displayName: string; totalXp: number; level: number }>>;
+  getLeaderboardSlice(userIds: string[]): Promise<LeaderboardSliceRow[]>;
 
   // Certificates
   /** Modules the user has COMPLETED (progress) but has no certificate for yet. */
@@ -78,14 +76,27 @@ export interface GamificationRepository {
   verifyCertificate(code: string): Promise<CertificateVerification>;
 }
 
+/** One row behind a leaderboard entry: score plus curriculum progress (M10). */
+export interface LeaderboardSliceRow {
+  userId: string;
+  displayName: string;
+  totalXp: number;
+  level: number;
+  lessonsCompleted: number;
+  totalLessons: number;
+  currentTopicTitle: string | null;
+}
+
 export interface Leaderboard {
   /** Adds delta XP for a user in the ZSET (rebuilds from Postgres if empty). */
   addXp(userId: string, totalXp: number): Promise<void>;
   topEntries(limit: number): Promise<Array<{ userId: string; totalXp: number }>>;
   rankOf(userId: string): Promise<number | null>;
+  /** User ids occupying an inclusive 1-based rank range — powers overtake detection. */
+  rangeByRank(fromRank: number, toRank: number): Promise<string[]>;
   rebuild(all: Array<{ userId: string; totalXp: number }>): Promise<void>;
   toEntries(
-    resolved: Array<{ userId: string; displayName: string; totalXp: number; level: number }>,
+    resolved: LeaderboardSliceRow[],
     ranks: Map<string, number>,
     currentUserId: string,
   ): LeaderboardEntry[];

@@ -1,7 +1,7 @@
 import type Redis from 'ioredis';
 import type { LeaderboardEntry } from '@academy/shared';
 import { levelForXp } from '@academy/shared';
-import type { Leaderboard } from '../application/ports';
+import type { Leaderboard, LeaderboardSliceRow } from '../application/ports';
 
 const KEY = 'leaderboard:alltime';
 
@@ -31,6 +31,12 @@ export class RedisLeaderboard implements Leaderboard {
     return rank === null ? null : rank + 1;
   }
 
+  /** Ranks are 1-based here; ZSET indices are 0-based. */
+  async rangeByRank(fromRank: number, toRank: number): Promise<string[]> {
+    if (toRank < fromRank) return [];
+    return this.redis.zrevrange(KEY, fromRank - 1, toRank - 1);
+  }
+
   async rebuild(all: Array<{ userId: string; totalXp: number }>): Promise<void> {
     const pipeline = this.redis.multi();
     pipeline.del(KEY);
@@ -41,7 +47,7 @@ export class RedisLeaderboard implements Leaderboard {
   }
 
   toEntries(
-    resolved: Array<{ userId: string; displayName: string; totalXp: number; level: number }>,
+    resolved: LeaderboardSliceRow[],
     ranks: Map<string, number>,
     currentUserId: string,
   ): LeaderboardEntry[] {
@@ -54,6 +60,9 @@ export class RedisLeaderboard implements Leaderboard {
         totalXp: row.totalXp,
         level: row.level || levelForXp(row.totalXp),
         isCurrentUser: row.userId === currentUserId,
+        lessonsCompleted: row.lessonsCompleted,
+        totalLessons: row.totalLessons,
+        currentTopicTitle: row.currentTopicTitle,
       }));
   }
 }

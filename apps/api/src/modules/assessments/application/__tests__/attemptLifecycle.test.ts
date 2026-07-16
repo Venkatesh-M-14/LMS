@@ -82,6 +82,10 @@ class FakeAssessmentRepo implements AssessmentRepository {
   async replaceItems() {
     /* not used */
   }
+  async appendItem() {
+    /* not used — authoring is covered by the suggestion + CMS tests */
+    return { id: 'item-appended' };
+  }
   async getLessonPublishedVersionId() {
     return 'lv-1';
   }

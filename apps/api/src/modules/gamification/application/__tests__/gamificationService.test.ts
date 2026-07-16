@@ -6,10 +6,17 @@ import type {
 } from '@academy/shared';
 import { levelForXp } from '@academy/shared';
 import { MutableClock } from '../../../auth/application/__tests__/fakes';
+import { EventBus } from '../../../../core/events/eventBus';
 import { ACHIEVEMENT_RULES, type AchievementContext } from '../../domain/achievements';
 import { applyActivity, type StreakState } from '../../domain/streak';
 import { GamificationService } from '../gamificationService';
-import type { AwardInput, GamificationRepository, Leaderboard, StatsRow } from '../ports';
+import type {
+  AwardInput,
+  GamificationRepository,
+  Leaderboard,
+  LeaderboardSliceRow,
+  StatsRow,
+} from '../ports';
 
 /** In-memory repository mirroring the SQL idempotency + streak projection. */
 class FakeRepo implements GamificationRepository {
@@ -113,7 +120,11 @@ class FakeRepo implements GamificationRepository {
   async getAllStatsForRebuild() {
     return [...this.stats.entries()].map(([userId, row]) => ({ userId, totalXp: row.totalXp }));
   }
-  async getLeaderboardSlice(userIds: string[]) {
+  lessonsCompletedByUser = new Map<string, number>();
+  totalLessons = 18;
+  currentTopicByUser = new Map<string, string>();
+
+  async getLeaderboardSlice(userIds: string[]): Promise<LeaderboardSliceRow[]> {
     return userIds
       .filter((id) => this.stats.has(id))
       .map((id) => ({
@@ -121,6 +132,9 @@ class FakeRepo implements GamificationRepository {
         displayName: this.displayNames.get(id) ?? id,
         totalXp: this.stats.get(id)!.totalXp,
         level: this.stats.get(id)!.level,
+        lessonsCompleted: this.lessonsCompletedByUser.get(id) ?? 0,
+        totalLessons: this.totalLessons,
+        currentTopicTitle: this.currentTopicByUser.get(id) ?? null,
       }));
   }
 
@@ -191,12 +205,16 @@ class FakeLeaderboard implements Leaderboard {
     const index = sorted.findIndex(([id]) => id === userId);
     return index === -1 ? null : index + 1;
   }
+  async rangeByRank(fromRank: number, toRank: number) {
+    const sorted = [...this.scores.entries()].sort((a, b) => b[1] - a[1]);
+    return sorted.slice(fromRank - 1, toRank).map(([userId]) => userId);
+  }
   async rebuild(all: Array<{ userId: string; totalXp: number }>) {
     this.scores.clear();
     for (const { userId, totalXp } of all) if (totalXp > 0) this.scores.set(userId, totalXp);
   }
   toEntries(
-    resolved: Array<{ userId: string; displayName: string; totalXp: number; level: number }>,
+    resolved: LeaderboardSliceRow[],
     ranks: Map<string, number>,
     currentUserId: string,
   ): LeaderboardEntry[] {
@@ -208,6 +226,9 @@ class FakeLeaderboard implements Leaderboard {
         displayName: r.displayName,
         totalXp: r.totalXp,
         level: r.level,
+        lessonsCompleted: r.lessonsCompleted,
+        totalLessons: r.totalLessons,
+        currentTopicTitle: r.currentTopicTitle,
         isCurrentUser: r.userId === currentUserId,
       }));
   }
@@ -220,6 +241,47 @@ function makeWorld() {
   const service = new GamificationService({ repo, leaderboard, clock });
   return { repo, leaderboard, clock, service };
 }
+
+describe('leaderboard overtake detection (M10)', () => {
+  it('emits LeaderboardOvertaken for each peer the user climbs past', async () => {
+    const repo = new FakeRepo();
+    const leaderboard = new FakeLeaderboard();
+    const clock = new MutableClock(new Date('2026-07-16T10:00:00Z'));
+    const events = new EventBus();
+    const service = new GamificationService({ repo, leaderboard, clock, events });
+
+    // Rival sits at 40 XP; the climber starts at 0 and will pass them.
+    repo.displayNames.set('climber', 'Climber');
+    repo.displayNames.set('rival', 'Rival');
+    await leaderboard.addXp('rival', 40);
+    await leaderboard.addXp('climber', 0);
+
+    const overtaken: Array<{ overtakenUserId: string; byUserId: string }> = [];
+    events.on('LeaderboardOvertaken', (e) => void overtaken.push(e));
+
+    // A passed quiz (30 + 20 lesson = 50 XP) lifts the climber above the rival.
+    await service.onAttemptGraded({ userId: 'climber', assessmentId: 'a', lessonId: 'l', passed: true, scorePct: 80 });
+
+    expect(overtaken).toEqual([{ overtakenUserId: 'rival', byUserId: 'climber', byDisplayName: 'Climber', newRank: 1 }]);
+  });
+
+  it('emits nothing when the user does not pass anyone', async () => {
+    const repo = new FakeRepo();
+    const leaderboard = new FakeLeaderboard();
+    const clock = new MutableClock(new Date('2026-07-16T10:00:00Z'));
+    const events = new EventBus();
+    const service = new GamificationService({ repo, leaderboard, clock, events });
+
+    repo.displayNames.set('solo', 'Solo');
+    await leaderboard.addXp('solo', 0);
+    const overtaken: unknown[] = [];
+    events.on('LeaderboardOvertaken', (e) => void overtaken.push(e));
+
+    await service.onAttemptGraded({ userId: 'solo', assessmentId: 'a', lessonId: 'l', passed: true, scorePct: 80 });
+
+    expect(overtaken).toHaveLength(0);
+  });
+});
 
 describe('XP awarding & idempotency', () => {
   it('a passed quiz awards quiz + lesson XP and unlocks starter achievements', async () => {

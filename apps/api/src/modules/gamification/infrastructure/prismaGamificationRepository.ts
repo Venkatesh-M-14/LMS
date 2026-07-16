@@ -8,7 +8,13 @@ import {
 import type { PrismaClient } from '../../../core/db/prisma';
 import { ACHIEVEMENT_RULES, type AchievementContext } from '../domain/achievements';
 import { applyActivity, type StreakState } from '../domain/streak';
-import type { AwardInput, GamificationRepository, StatsRow, XpReason } from '../application/ports';
+import type {
+  AwardInput,
+  GamificationRepository,
+  LeaderboardSliceRow,
+  StatsRow,
+  XpReason,
+} from '../application/ports';
 
 export class PrismaGamificationRepository implements GamificationRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -177,16 +183,56 @@ export class PrismaGamificationRepository implements GamificationRepository {
     return this.prisma.userStats.findMany({ select: { userId: true, totalXp: true } });
   }
 
-  async getLeaderboardSlice(userIds: string[]) {
-    const stats = await this.prisma.userStats.findMany({
-      where: { userId: { in: userIds } },
-      select: { userId: true, totalXp: true, level: true, user: { select: { displayName: true } } },
+  /**
+   * Score plus curriculum progress, so the circle sees how far each member
+   * actually is — not just their XP (M10).
+   */
+  async getLeaderboardSlice(userIds: string[]): Promise<LeaderboardSliceRow[]> {
+    const [stats, totalLessons, completedGroups, inProgress] = await Promise.all([
+      this.prisma.userStats.findMany({
+        where: { userId: { in: userIds } },
+        select: {
+          userId: true,
+          totalXp: true,
+          level: true,
+          user: { select: { displayName: true } },
+        },
+      }),
+      this.prisma.lesson.count({ where: { currentPublishedVersionId: { not: null } } }),
+      this.prisma.progressRecord.groupBy({
+        by: ['userId'],
+        where: { userId: { in: userIds }, unitType: 'LESSON', status: 'COMPLETED' },
+        _count: { _all: true },
+      }),
+      // Newest first, so the first row per user is what they're on right now.
+      this.prisma.progressRecord.findMany({
+        where: { userId: { in: userIds }, unitType: 'LESSON', status: 'IN_PROGRESS' },
+        orderBy: { updatedAt: 'desc' },
+        select: { userId: true, unitId: true },
+      }),
+    ]);
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { id: { in: [...new Set(inProgress.map((p) => p.unitId))] } },
+      select: { id: true, topic: { select: { title: true } } },
     });
+    const topicByLesson = new Map(lessons.map((l) => [l.id, l.topic.title]));
+    const currentTopicByUser = new Map<string, string>();
+    for (const record of inProgress) {
+      if (currentTopicByUser.has(record.userId)) continue;
+      const topic = topicByLesson.get(record.unitId);
+      if (topic) currentTopicByUser.set(record.userId, topic);
+    }
+    const completedByUser = new Map(completedGroups.map((g) => [g.userId, g._count._all]));
+
     return stats.map((row) => ({
       userId: row.userId,
       displayName: row.user.displayName,
       totalXp: row.totalXp,
       level: row.level,
+      lessonsCompleted: completedByUser.get(row.userId) ?? 0,
+      totalLessons,
+      currentTopicTitle: currentTopicByUser.get(row.userId) ?? null,
     }));
   }
 

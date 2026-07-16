@@ -26,6 +26,7 @@ import { fetchProgressMap, markLessonComplete, progressKeys } from '../progress/
 import { RevisionPanel } from '../adaptive/RevisionPanel';
 import { adaptiveKeys } from '../adaptive/api';
 import { LessonMentorDrawer } from '../mentor/LessonMentorDrawer';
+import { LessonDiscussion } from '../chat/LessonDiscussion';
 
 export function LessonPage() {
   const { t } = useTranslation();
@@ -178,6 +179,8 @@ export function LessonPage() {
           </Button>
         </Stack>
       ) : null}
+
+      <LessonDiscussion lessonId={lesson.lessonId} />
 
       <LessonMentorDrawer lessonId={lesson.lessonId} lessonTitle={lesson.title} />
     </Box>
