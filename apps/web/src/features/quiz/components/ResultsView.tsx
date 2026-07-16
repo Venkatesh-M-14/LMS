@@ -11,7 +11,6 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { useTranslation } from 'react-i18next';
-import { z } from 'zod';
 import {
   mcqPayloadSchema,
   multiSelectPayloadSchema,
@@ -20,6 +19,12 @@ import {
   type AttemptResult,
   type ItemResult,
 } from '@academy/shared';
+import { z } from 'zod';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { CodeSnippet } from './ItemInputs';
 
 /**
@@ -153,6 +158,99 @@ function ItemReview({ item }: { item: ItemResult }) {
               </Box>
             </Stack>
             {full.data.explanation ? <Alert severity="info">{full.data.explanation}</Alert> : null}
+          </Stack>
+        );
+      }
+      case 'CODING':
+      case 'DEBUGGING': {
+        const codingView = z
+          .object({
+            title: z.string().optional(),
+            instructionsMd: z.string().optional(),
+          })
+          .safeParse(item.payload);
+        const files =
+          answer.files && typeof answer.files === 'object'
+            ? (answer.files as Record<string, string>)
+            : {};
+        const run = item.run;
+        return (
+          <Stack spacing={1.5}>
+            {codingView.success && codingView.data.title ? (
+              <Typography sx={{ fontWeight: 600 }}>{codingView.data.title}</Typography>
+            ) : null}
+            {Object.entries(files).map(([name, content]) => (
+              <Box key={name}>
+                <Typography variant="caption" color="text.secondary">
+                  {name}
+                </Typography>
+                <CodeSnippet code={content} language="javascript" />
+              </Box>
+            ))}
+            {run ? (
+              <>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Chip
+                    size="small"
+                    color={
+                      run.status === 'PASSED'
+                        ? 'success'
+                        : run.status === 'FAILED'
+                          ? 'error'
+                          : run.status === 'QUEUED' || run.status === 'RUNNING'
+                            ? 'warning'
+                            : 'error'
+                    }
+                    label={t(`quiz.coding.status.${run.status}`)}
+                  />
+                  {run.durationMs !== null ? (
+                    <Typography variant="caption" color="text.secondary">
+                      {run.durationMs}ms
+                    </Typography>
+                  ) : null}
+                </Stack>
+                {run.status === 'QUEUED' || run.status === 'RUNNING' ? (
+                  <Alert severity="info">{t('quiz.coding.judging')}</Alert>
+                ) : null}
+                {run.errorMessage ? <Alert severity="error">{run.errorMessage}</Alert> : null}
+                {run.results.length > 0 ? (
+                  <List dense disablePadding>
+                    {run.results.map((result) => (
+                      <ListItem key={result.testId} disableGutters>
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          {result.passed ? (
+                            <CheckCircleIcon fontSize="small" color="success" />
+                          ) : (
+                            <CancelIcon fontSize="small" color="error" />
+                          )}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <span>{result.name}</span>
+                              {result.hidden ? (
+                                <VisibilityOffIcon sx={{ fontSize: 14 }} color="disabled" />
+                              ) : null}
+                            </Stack>
+                          }
+                          secondary={result.passed ? null : result.message || null}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : null}
+                {run.stdout ? (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('quiz.coding.consoleOutput')}
+                    </Typography>
+                    <CodeSnippet code={run.stdout} language="text" />
+                  </Box>
+                ) : null}
+              </>
+            ) : (
+              <Alert severity="info">{t('quiz.coding.judging')}</Alert>
+            )}
           </Stack>
         );
       }

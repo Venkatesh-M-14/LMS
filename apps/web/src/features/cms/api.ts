@@ -1,5 +1,6 @@
 import type {
   AssessmentAuthoringView,
+  ChallengeSummary,
   CmsLessonOverview,
   ContentBlockInput,
   CreateLessonRequest,
@@ -20,6 +21,7 @@ export const cmsKeys = {
   versions: (lessonId: string) => ['cms', 'versions', lessonId] as const,
   version: (versionId: string) => ['cms', 'version', versionId] as const,
   assessment: (lessonId: string) => ['cms', 'assessment', lessonId] as const,
+  challenges: ['cms', 'challenges'] as const,
   gradingQueue: ['cms', 'grading'] as const,
   gradingDetail: (attemptId: string) => ['cms', 'grading', attemptId] as const,
 };
@@ -98,6 +100,10 @@ export function replaceAssessmentItems(
   request: ReplaceItemsRequest,
 ): Promise<void> {
   return apiRequest(`/cms/assessments/${assessmentId}/items`, { method: 'PUT', body: request });
+}
+
+export function fetchChallenges(): Promise<ChallengeSummary[]> {
+  return apiRequest('/cms/challenges');
 }
 
 export function fetchGradingQueue(): Promise<GradingQueueEntry[]> {

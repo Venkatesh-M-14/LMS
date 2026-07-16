@@ -4,6 +4,7 @@ import argon2 from 'argon2';
 import { MODULES_SEED, PATH_SEED } from './seedData/curriculum';
 import { LESSONS_SEED } from './seedData/lessons';
 import { QUIZZES_SEED } from './seedData/quizzes';
+import { CHALLENGE_ATTACHMENTS, CHALLENGES_SEED } from './seedData/challenges';
 import { generateDefaultRules } from '../src/modules/progress/domain/gating';
 
 /**
@@ -250,6 +251,82 @@ async function seedQuizzes(prisma: PrismaClient) {
   console.warn(`Seeded quizzes: ${created} created, ${skipped} left untouched`);
 }
 
+async function seedChallenges(prisma: PrismaClient) {
+  let created = 0;
+  let skipped = 0;
+
+  for (const seed of CHALLENGES_SEED) {
+    const existing = await prisma.codingChallenge.findUnique({ where: { slug: seed.slug } });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    await prisma.codingChallenge.create({
+      data: {
+        slug: seed.slug,
+        title: seed.title,
+        environment: seed.environment,
+        instructionsMd: seed.instructionsMd,
+        starterFiles: seed.starterFiles,
+        solutionFiles: seed.solutionFiles,
+        timeLimitMs: seed.timeLimitMs,
+        testCases: {
+          create: seed.tests.map((test, index) => ({
+            order: index + 1,
+            name: test.name,
+            kind: test.kind,
+            specCode: test.specCode,
+            weight: test.weight,
+            isHidden: test.isHidden,
+          })),
+        },
+      },
+    });
+    created++;
+  }
+  console.warn(`Seeded challenges: ${created} created, ${skipped} left untouched`);
+
+  // Attach coding items to their lesson quizzes (idempotent).
+  let attached = 0;
+  for (const attachment of CHALLENGE_ATTACHMENTS) {
+    const lesson = await prisma.lesson.findFirst({ where: { slug: attachment.lessonSlug } });
+    const challenge = await prisma.codingChallenge.findUnique({
+      where: { slug: attachment.challengeSlug },
+    });
+    if (!lesson || !challenge) continue;
+    const assessment = await prisma.assessment.findUnique({ where: { lessonId: lesson.id } });
+    if (!assessment) continue;
+
+    const items = await prisma.assessmentItem.findMany({ where: { assessmentId: assessment.id } });
+    const already = items.some(
+      (item) => (item.payload as { challengeId?: string })?.challengeId === challenge.id,
+    );
+    if (already) continue;
+
+    const item = await prisma.assessmentItem.create({
+      data: {
+        assessmentId: assessment.id,
+        order: Math.max(0, ...items.map((i) => i.order)) + 1,
+        type: attachment.itemType,
+        points: attachment.points,
+        payload: { challengeId: challenge.id },
+      },
+    });
+    const skills = await prisma.skill.findMany({
+      where: { slug: { in: attachment.skillSlugs } },
+      select: { id: true },
+    });
+    if (skills.length > 0) {
+      await prisma.assessmentItemSkill.createMany({
+        data: skills.map((skill) => ({ itemId: item.id, skillId: skill.id })),
+        skipDuplicates: true,
+      });
+    }
+    attached++;
+  }
+  console.warn(`Attached coding items: ${attached}`);
+}
+
 async function seedPrerequisiteRules(prisma: PrismaClient) {
   const path = await prisma.path.findFirst({
     where: { isActive: true },
@@ -297,6 +374,7 @@ async function main(): Promise<void> {
     const topicIdBySlug = await seedCurriculum(prisma);
     await seedLessons(prisma, topicIdBySlug, instructor.id, admin.id);
     await seedQuizzes(prisma);
+    await seedChallenges(prisma);
     await seedPrerequisiteRules(prisma);
   } finally {
     await prisma.$disconnect();

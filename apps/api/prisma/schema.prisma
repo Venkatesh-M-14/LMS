@@ -249,6 +249,8 @@ enum AssessmentItemType {
   MULTI_SELECT
   OUTPUT_PREDICTION
   REFLECTION
+  CODING
+  DEBUGGING
 }
 
 enum AttemptStatus {
@@ -333,9 +335,9 @@ model Attempt {
 }
 
 model ItemSubmission {
-  id             String    @id @default(cuid())
+  id             String         @id @default(cuid())
   attemptId      String
-  attempt        Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attempt        Attempt        @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   /// References the itemId inside the attempt's snapshot (not a live FK —
   /// the live item may be edited or deleted after the snapshot was taken).
   itemId         String
@@ -343,10 +345,11 @@ model ItemSubmission {
   autoScore      Float?
   manualScore    Float?
   graderId       String?
-  grader         User?     @relation(fields: [graderId], references: [id])
-  graderFeedback String    @default("")
+  grader         User?          @relation(fields: [graderId], references: [id])
+  graderFeedback String         @default("")
   gradedAt       DateTime?
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime       @updatedAt
+  executionRuns  ExecutionRun[]
 
   @@unique([attemptId, itemId])
   @@map("item_submissions")
@@ -411,4 +414,91 @@ model PrerequisiteRule {
   @@unique([unitType, unitId, requiredUnitType, requiredUnitId])
   @@index([unitType, unitId])
   @@map("prerequisite_rules")
+}
+
+// ─── Coding challenges & the judge ──────────────────────────────────────────
+// Challenges are referenced by CODING/DEBUGGING assessment items. At attempt
+// start the full challenge (instructions, starter files, ALL test cases) is
+// frozen into the attempt snapshot — the judge grades from the snapshot, so
+// editing a challenge never changes how an in-flight attempt is scored.
+
+enum ChallengeEnvironment {
+  JS
+  DOM
+}
+
+enum TestCaseKind {
+  UNIT
+  DOM
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  TIMEOUT
+  ERROR
+}
+
+model CodingChallenge {
+  id             String               @id @default(cuid())
+  slug           String               @unique
+  title          String
+  environment    ChallengeEnvironment
+  instructionsMd String
+  /// { "path": "content" } — what the student starts from.
+  starterFiles   Json
+  /// Reference solution; never serialized to clients or snapshots.
+  solutionFiles  Json
+  timeLimitMs    Int                  @default(5000)
+  memoryLimitMb  Int                  @default(128)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  testCases TestCase[]
+
+  @@map("coding_challenges")
+}
+
+model TestCase {
+  id          String          @id @default(cuid())
+  challengeId String
+  challenge   CodingChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  order       Int
+  name        String
+  kind        TestCaseKind
+  /// Test body: has `assert`/`assertEqual` in scope, plus the student code's
+  /// globals (and `document` for DOM challenges).
+  specCode    String
+  weight      Int             @default(1)
+  /// Hidden cases never leave the server (not even in sanitized snapshots).
+  isHidden    Boolean         @default(false)
+  timeoutMs   Int             @default(2000)
+
+  @@unique([challengeId, order])
+  @@map("test_cases")
+}
+
+/// One judge execution for one item submission. A submission can have many
+/// runs (retries); the latest terminal run is authoritative for its score.
+model ExecutionRun {
+  id               String          @id @default(cuid())
+  itemSubmissionId String
+  itemSubmission   ItemSubmission  @relation(fields: [itemSubmissionId], references: [id], onDelete: Cascade)
+  status           ExecutionStatus @default(QUEUED)
+  submittedFiles   Json
+  /// [{ testId, name, passed, message, hidden, weight, durationMs }]
+  resultsJson      Json?
+  stdout           String          @default("")
+  errorMessage     String          @default("")
+  durationMs       Int?
+  judgeVersion     String          @default("1")
+  createdAt        DateTime        @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+
+  @@index([itemSubmissionId, createdAt])
+  @@index([status])
+  @@map("execution_runs")
 }

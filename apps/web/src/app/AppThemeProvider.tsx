@@ -4,7 +4,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useAppSelector } from './hooks';
 import { buildTheme } from './theme';
 
-export function AppThemeProvider({ children }: { children: ReactNode }) {
+export function AppThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
   const mode = useAppSelector((state) => state.ui.themeMode);
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 

@@ -13,7 +13,7 @@ import {
 export const snapshotItemSchema = z.object({
   itemId: z.string(),
   order: z.number().int(),
-  type: z.enum(['MCQ', 'MULTI_SELECT', 'OUTPUT_PREDICTION', 'REFLECTION']),
+  type: z.enum(['MCQ', 'MULTI_SELECT', 'OUTPUT_PREDICTION', 'REFLECTION', 'CODING', 'DEBUGGING']),
   points: z.number().int().min(1),
   payload: z.unknown(),
 });

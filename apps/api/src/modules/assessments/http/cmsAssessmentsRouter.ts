@@ -47,6 +47,13 @@ export function buildCmsAssessmentsRouter(deps: CmsAssessmentsRouterDeps): Route
   );
 
   router.get(
+    '/challenges',
+    asyncHandler(async (_req, res) => {
+      ok(res, await deps.authoring.listChallenges());
+    }),
+  );
+
+  router.get(
     '/grading',
     asyncHandler(async (_req, res) => {
       ok(res, await deps.grading.listQueue());

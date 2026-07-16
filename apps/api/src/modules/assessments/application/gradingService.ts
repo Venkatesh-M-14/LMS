@@ -6,17 +6,16 @@ import {
 } from '@academy/shared';
 import { AppError, NotFoundError } from '../../../core/errors/appError';
 import type { Clock } from '../../auth/application/ports';
-import type { EventBus } from '../../../core/events/eventBus';
-import { roundScore, toScorePct } from '../domain/grading';
+import { roundScore } from '../domain/grading';
 import { parseSnapshot, toTypedItem } from '../domain/snapshot';
-import type { AssessmentRepository, AttemptRepository, GradingRepository } from './ports';
+import type { AttemptFinalizer } from './attemptFinalizer';
+import type { AttemptRepository, GradingRepository } from './ports';
 
 export interface GradingServiceDeps {
   grading: GradingRepository;
   attempts: AttemptRepository;
-  assessments: AssessmentRepository;
+  finalizer: AttemptFinalizer;
   clock: Clock;
-  events?: EventBus;
 }
 
 /** Instructor-side manual grading of reflection answers. */
@@ -123,41 +122,6 @@ export class GradingService {
       now,
     );
 
-    // Finalize when every reflection has a manual score.
-    const refreshed = await this.deps.attempts.findById(attempt.id);
-    if (!refreshed) return;
-    const stillPending = refreshed.submissions.some(
-      (s) => s.autoScore === null && s.manualScore === null,
-    );
-    if (stillPending) return;
-
-    const assessment = await this.deps.assessments.findById(refreshed.assessmentId);
-    if (!assessment) throw new NotFoundError('Assessment not found');
-
-    const maxScore = snapshot.reduce((sum, i) => sum + i.points, 0);
-    const rawScore = roundScore(
-      refreshed.submissions.reduce((sum, s) => sum + (s.manualScore ?? s.autoScore ?? 0), 0),
-    );
-    const scorePct = toScorePct(rawScore, maxScore);
-
-    const passed = scorePct >= assessment.passingScorePct;
-    await this.deps.grading.finalizeAttempt(refreshed.id, {
-      status: 'GRADED',
-      rawScore,
-      maxScore,
-      scorePct,
-      passed,
-      gradedAt: now,
-    });
-
-    if (this.deps.events) {
-      await this.deps.events.emit('AttemptGraded', {
-        userId: refreshed.userId,
-        assessmentId: assessment.id,
-        lessonId: assessment.lessonId,
-        passed,
-        scorePct,
-      });
-    }
+    await this.deps.finalizer.finalizeIfComplete(attempt.id);
   }
 }

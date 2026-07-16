@@ -18,6 +18,7 @@ import {
   type StudentItemView,
 } from '@academy/shared';
 import { z } from 'zod';
+import { CodingItemInput } from './CodingItemInput';
 
 /**
  * Per-type answer inputs for an in-progress attempt. Student payloads are
@@ -181,6 +182,16 @@ export function ItemInput({ item, value, onChange, disabled }: ItemInputProps) {
         </Stack>
       );
     }
+    case 'CODING':
+    case 'DEBUGGING':
+      return (
+        <CodingItemInput
+          payload={item.payload}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
     default:
       return null;
   }

@@ -98,6 +98,15 @@ Attempt (per student: itemsSnapshot ❄, pinned lessonVersionId)
 - **Attempt admission** (resume-first, then max-attempts, then cooldown) is a pure policy function; limits and cooldowns are per-assessment settings.
 - **Autosave + submit-flush**: the client debounces answer saves and also sends the full answer set with submit, so a lost autosave can't lose work.
 
+## Coding playground & judge (M5)
+
+Two-tier execution, exactly as designed:
+
+- **Tier 1 — client, instant, advisory.** "Run visible tests" executes in the browser: JS in a throwaway Web Worker (hard 2 s terminate), DOM in a sandboxed opaque-origin `srcdoc` iframe with a postMessage protocol. Only non-hidden test specs ever reach the client; results are UI feedback, never grades.
+- **Tier 2 — server, authoritative.** Submitting an attempt writes `ExecutionRun` intent rows, commits, then enqueues BullMQ jobs (a crashed enqueue leaves a recoverable QUEUED row, never a ghost job). The worker claims runs atomically (`QUEUED → RUNNING` guard), executes in the sandbox, scores by test weights, and the shared `AttemptFinalizer` closes the attempt when the last pending grade (judge or manual) lands. Socket.IO pushes `attempt:graded` to the user's room; the client also polls as a fallback.
+- **Snapshot grading.** At attempt start the full challenge (instructions, starter files, ALL tests) is frozen into the attempt snapshot; the judge grades from the snapshot, so challenge edits never affect in-flight attempts. Solutions are never part of the freeze.
+- **The sandbox** ([sandboxRunner.cjs](../apps/api/src/modules/judge/runner/sandboxRunner.cjs)) is one child process per run with layered containment: clean env (no secrets), Node permission model (fs reads limited to the runner + node_modules, no writes/child_process/workers), network globals deleted before user code runs, a curated `vm` context (in-context console/assert — no host functions in user reach), per-file/per-test sync timeouts, `--max-old-space-size` memory cap, and a parent SIGKILL deadline. **Documented trade-off:** process-level, not VM-level isolation — the `JudgeService` port allows swapping this lane for isolated-vm/gVisor without redesign. The abuse suite (infinite loops, allocation bombs, constructor-chain escapes, fs/network/env probes) runs against the real runner in CI.
+
 ## Progress & gating (M4)
 
 - **Derived availability, persisted achievement.** Only `IN_PROGRESS`/`COMPLETED` are stored (`ProgressRecord`, polymorphic over lesson/topic/module). `LOCKED`/`AVAILABLE` are computed on every read from `PrerequisiteRule` + completions ([gating.ts](../apps/api/src/modules/progress/domain/gating.ts)) — there is no unlock state to corrupt or race.

@@ -6,7 +6,9 @@ import {
   type AttemptInProgress,
   type AttemptResult,
   type AttemptView,
+  type ExecutionRunView,
   type ItemResult,
+  type TestResultView,
 } from '@academy/shared';
 import { AppError, ForbiddenError, NotFoundError } from '../../../core/errors/appError';
 import type { Role } from '@academy/shared';
@@ -21,6 +23,7 @@ import type {
   AttemptRecord,
   AttemptRepository,
   GradeWrite,
+  JudgeQueuePort,
 } from './ports';
 
 export interface AttemptServiceDeps {
@@ -33,6 +36,8 @@ export interface AttemptServiceDeps {
   accessGate?: {
     assertLessonAccessible(actor: { id: string; role: Role }, lessonId: string): Promise<void>;
   };
+  /** BullMQ adapter; absent in unit tests that never submit coding items. */
+  judgeQueue?: JudgeQueuePort;
   /** Injectable for deterministic shuffle tests. */
   random?: () => number;
 }
@@ -129,13 +134,32 @@ export class AttemptService {
     }
 
     const ordered = assessment.shuffleItems ? this.shuffle(items) : items;
-    const snapshot: SnapshotItem[] = ordered.map((item, index) => ({
-      itemId: item.id,
-      order: index + 1,
-      type: item.type,
-      points: item.points,
-      payload: item.payload,
-    }));
+    const snapshot: SnapshotItem[] = [];
+    for (const [index, item] of ordered.entries()) {
+      let payload = item.payload;
+      if (item.type === 'CODING' || item.type === 'DEBUGGING') {
+        // Freeze the full challenge (instructions, starter files, ALL tests)
+        // into the snapshot: the judge grades from here, so challenge edits
+        // never change how this attempt is scored.
+        const challengeId = (payload as { challengeId?: string }).challengeId ?? '';
+        const frozen = await this.deps.assessments.getChallengeFreeze(challengeId);
+        if (!frozen) {
+          throw new AppError(
+            ErrorCodes.NO_ITEMS_TO_ATTEMPT,
+            409,
+            'A coding challenge in this quiz is missing',
+          );
+        }
+        payload = frozen;
+      }
+      snapshot.push({
+        itemId: item.id,
+        order: index + 1,
+        type: item.type,
+        points: item.points,
+        payload,
+      });
+    }
 
     const lessonVersionId = assessment.lessonId
       ? await this.deps.assessments.getLessonPublishedVersionId(assessment.lessonId)
@@ -206,30 +230,47 @@ export class AttemptService {
     const now = this.deps.clock.now();
     let rawScore = 0;
     let needsManual = false;
+    const judgeItemIds: string[] = [];
     const grades: GradeWrite[] = snapshot.map((item) => {
       const answer = answerByItem.get(item.itemId) ?? null;
       const grade = gradeItem(item, answer);
       if (grade.needsManual) needsManual = true;
-      else rawScore += grade.autoScore ?? 0;
+      if (grade.needsJudge) judgeItemIds.push(item.itemId);
+      if (!grade.needsManual && !grade.needsJudge) rawScore += grade.autoScore ?? 0;
       return { itemId: item.itemId, answer, autoScore: grade.autoScore };
     });
 
+    const pending = needsManual || judgeItemIds.length > 0;
     const maxScore = snapshot.reduce((sum, item) => sum + item.points, 0);
     rawScore = roundScore(rawScore);
-    const scorePct = needsManual ? null : toScorePct(rawScore, maxScore);
+    const scorePct = pending ? null : toScorePct(rawScore, maxScore);
 
-    const passed = needsManual ? null : scorePct! >= assessment.passingScorePct;
+    const passed = pending ? null : scorePct! >= assessment.passingScorePct;
     await this.deps.attempts.applyGrading(attemptId, grades, {
-      status: needsManual ? 'GRADING' : 'GRADED',
-      rawScore: needsManual ? null : rawScore,
+      status: pending ? 'GRADING' : 'GRADED',
+      rawScore: pending ? null : rawScore,
       maxScore,
       scorePct,
       passed,
       submittedAt: now,
-      gradedAt: needsManual ? null : now,
+      gradedAt: pending ? null : now,
     });
 
-    if (!needsManual && this.deps.events) {
+    // Intent rows first, commit, THEN enqueue — a crashed enqueue leaves a
+    // recoverable QUEUED row, never a ghost job.
+    if (judgeItemIds.length > 0) {
+      const withSubmissions = await this.deps.attempts.findById(attemptId);
+      for (const itemId of judgeItemIds) {
+        const submission = withSubmissions?.submissions.find((s) => s.itemId === itemId);
+        const answer = answerByItem.get(itemId) as { files?: Record<string, string> } | null;
+        if (!submission || !answer?.files) continue;
+        const run = await this.deps.attempts.createExecutionRun(submission.id, answer.files);
+        await this.deps.judgeQueue?.enqueue(run.id);
+      }
+    }
+
+    // While pending, the AttemptGraded event fires from the finalizer instead.
+    if (!pending && this.deps.events) {
       await this.deps.events.emit('AttemptGraded', {
         userId,
         assessmentId: assessment.id,
@@ -308,6 +349,20 @@ export class AttemptService {
       const earned = submission ? (submission.manualScore ?? submission.autoScore) : 0;
       const typed = toTypedItem(item);
       const isReflection = item.type === 'REFLECTION';
+      const isCoding = item.type === 'CODING' || item.type === 'DEBUGGING';
+
+      const run = submission?.latestRun;
+      const runView: ExecutionRunView | null = run
+        ? {
+            id: run.id,
+            status: run.status,
+            results: Array.isArray(run.resultsJson) ? (run.resultsJson as TestResultView[]) : [],
+            stdout: run.stdout,
+            errorMessage: run.errorMessage,
+            durationMs: run.durationMs,
+          }
+        : null;
+
       return {
         itemId: item.itemId,
         order: item.order,
@@ -315,10 +370,12 @@ export class AttemptService {
         points: item.points,
         earned,
         correct: isReflection || earned === null ? null : earned >= item.points,
-        // Answer keys are only revealed once nothing is pending on this item.
-        payload: earned === null ? toStudentPayload(typed) : typed.payload,
+        // Answer keys reveal after grading — EXCEPT hidden test specs, which
+        // never leave the server even on graded coding items.
+        payload: earned === null || isCoding ? toStudentPayload(typed) : typed.payload,
         answer: submission?.answer ?? null,
         graderFeedback: submission?.graderFeedback ?? '',
+        run: runView,
       };
     });
 

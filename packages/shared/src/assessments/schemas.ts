@@ -15,6 +15,8 @@ export const AssessmentItemTypes = [
   'MULTI_SELECT',
   'OUTPUT_PREDICTION',
   'REFLECTION',
+  'CODING',
+  'DEBUGGING',
 ] as const;
 export const assessmentItemTypeSchema = z.enum(AssessmentItemTypes);
 export type AssessmentItemType = z.infer<typeof assessmentItemTypeSchema>;
@@ -81,11 +83,45 @@ export const reflectionPayloadSchema = z.object({
   minWords: z.number().int().min(1).max(1000).optional(),
 });
 
+export const challengeEnvironmentSchema = z.enum(['JS', 'DOM']);
+export type ChallengeEnvironment = z.infer<typeof challengeEnvironmentSchema>;
+
+/** A test case as frozen into an attempt snapshot (spec + weights included). */
+export const frozenTestSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(['UNIT', 'DOM']),
+  specCode: z.string(),
+  weight: z.number().int().min(1),
+  isHidden: z.boolean(),
+  timeoutMs: z.number().int().min(100).max(30_000),
+});
+export type FrozenTest = z.infer<typeof frozenTestSchema>;
+
+/**
+ * CODING/DEBUGGING payload. Authoring stores only { challengeId }; at attempt
+ * start the full challenge is frozen in (so the judge grades from the
+ * snapshot and challenge edits never touch in-flight attempts).
+ */
+export const codingPayloadSchema = z.object({
+  challengeId: z.string().min(1),
+  title: z.string().optional(),
+  environment: challengeEnvironmentSchema.optional(),
+  instructionsMd: z.string().optional(),
+  starterFiles: z.record(z.string().max(120), z.string().max(50_000)).optional(),
+  timeLimitMs: z.number().int().optional(),
+  memoryLimitMb: z.number().int().optional(),
+  tests: z.array(frozenTestSchema).optional(),
+});
+export type CodingPayload = z.infer<typeof codingPayloadSchema>;
+
 export const assessmentItemPayloadSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('MCQ'), payload: mcqPayloadSchema }),
   z.object({ type: z.literal('MULTI_SELECT'), payload: multiSelectPayloadSchema }),
   z.object({ type: z.literal('OUTPUT_PREDICTION'), payload: outputPredictionPayloadSchema }),
   z.object({ type: z.literal('REFLECTION'), payload: reflectionPayloadSchema }),
+  z.object({ type: z.literal('CODING'), payload: codingPayloadSchema }),
+  z.object({ type: z.literal('DEBUGGING'), payload: codingPayloadSchema }),
 ]);
 export type AssessmentItemPayload = z.infer<typeof assessmentItemPayloadSchema>;
 
@@ -105,11 +141,20 @@ export const outputPredictionAnswerSchema = z.object({
 });
 export const reflectionAnswerSchema = z.object({ text: z.string().max(10_000) });
 
+export const codingAnswerSchema = z
+  .object({
+    files: z.record(z.string().min(1).max(120), z.string().max(50_000)),
+  })
+  .refine((a) => Object.keys(a.files).length <= 5, { message: 'At most 5 files' });
+export type CodingAnswer = z.infer<typeof codingAnswerSchema>;
+
 export const answerSchemaByType: Record<AssessmentItemType, z.ZodTypeAny> = {
   MCQ: mcqAnswerSchema,
   MULTI_SELECT: multiSelectAnswerSchema,
   OUTPUT_PREDICTION: outputPredictionAnswerSchema,
   REFLECTION: reflectionAnswerSchema,
+  CODING: codingAnswerSchema,
+  DEBUGGING: codingAnswerSchema,
 };
 
 export const saveAnswersRequestSchema = z.object({
@@ -144,7 +189,62 @@ export function toStudentPayload(item: AssessmentItemPayload): unknown {
       };
     case 'REFLECTION':
       return item.payload;
+    case 'CODING':
+    case 'DEBUGGING': {
+      const tests = item.payload.tests ?? [];
+      return {
+        challengeId: item.payload.challengeId,
+        title: item.payload.title,
+        environment: item.payload.environment,
+        instructionsMd: item.payload.instructionsMd,
+        starterFiles: item.payload.starterFiles,
+        timeLimitMs: item.payload.timeLimitMs,
+        // Visible specs ship to the client for instant local runs;
+        // hidden tests never leave the server — only their count does.
+        visibleTests: tests
+          .filter((test) => !test.isHidden)
+          .map((test) => ({
+            id: test.id,
+            name: test.name,
+            kind: test.kind,
+            specCode: test.specCode,
+          })),
+        hiddenTestCount: tests.filter((test) => test.isHidden).length,
+      };
+    }
   }
+}
+
+// ── Judge / execution runs ──────────────────────────────────────────────────
+
+export interface TestResultView {
+  testId: string;
+  name: string;
+  passed: boolean;
+  /** Failure message; empty for passes. Hidden tests reveal name+result only. */
+  message: string;
+  hidden: boolean;
+  weight: number;
+  durationMs: number;
+}
+
+export type ExecutionStatusView = 'QUEUED' | 'RUNNING' | 'PASSED' | 'FAILED' | 'TIMEOUT' | 'ERROR';
+
+export interface ExecutionRunView {
+  id: string;
+  status: ExecutionStatusView;
+  results: TestResultView[];
+  stdout: string;
+  errorMessage: string;
+  durationMs: number | null;
+}
+
+export interface ChallengeSummary {
+  id: string;
+  slug: string;
+  title: string;
+  environment: ChallengeEnvironment;
+  testCount: number;
 }
 
 // ── Attempt DTOs ────────────────────────────────────────────────────────────
@@ -198,6 +298,8 @@ export interface ItemResult {
   payload: unknown;
   answer: unknown;
   graderFeedback: string;
+  /** Latest judge run for CODING/DEBUGGING items; null for other types. */
+  run: ExecutionRunView | null;
 }
 
 export interface AttemptResult {

@@ -24,6 +24,8 @@ const envSchema = z.object({
   RATE_LIMIT_AUTH_PER_WINDOW: z.coerce.number().int().positive().default(30),
   /** All other API endpoints: requests per minute per IP. */
   RATE_LIMIT_GLOBAL_PER_MIN: z.coerce.number().int().positive().default(300),
+  /** Concurrent sandbox processes per judge worker. */
+  JUDGE_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

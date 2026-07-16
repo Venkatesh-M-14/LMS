@@ -2,6 +2,7 @@ import { ErrorCodes } from '@academy/shared';
 import { AppError } from '../../../../core/errors/appError';
 import { MutableClock } from '../../../auth/application/__tests__/fakes';
 import { AttemptService } from '../attemptService';
+import { AttemptFinalizer } from '../attemptFinalizer';
 import { GradingService } from '../gradingService';
 import type {
   AssessmentRecord,
@@ -84,6 +85,12 @@ class FakeAssessmentRepo implements AssessmentRepository {
   async getLessonPublishedVersionId() {
     return 'lv-1';
   }
+  async getChallengeFreeze() {
+    return null;
+  }
+  async listChallenges() {
+    return [];
+  }
 }
 
 class FakeAttemptRepo implements AttemptRepository {
@@ -146,6 +153,50 @@ class FakeAttemptRepo implements AttemptRepository {
       }
     }
   }
+  runs: Array<{ id: string; submissionId: string; files: Record<string, string>; status: string }> =
+    [];
+
+  async createExecutionRun(itemSubmissionId: string, files: Record<string, string>) {
+    const run = {
+      id: `run-${this.state.nextId++}`,
+      submissionId: itemSubmissionId,
+      files,
+      status: 'QUEUED',
+    };
+    this.runs.push(run);
+    return { id: run.id };
+  }
+  async claimRun(runId: string) {
+    const run = this.runs.find((r) => r.id === runId && r.status === 'QUEUED');
+    if (!run) return null;
+    run.status = 'RUNNING';
+    for (const attempt of this.state.attempts) {
+      const submission = attempt.submissions.find((s) => s.id === run.submissionId);
+      if (submission) {
+        return {
+          runId: run.id,
+          submissionId: submission.id,
+          attemptId: attempt.id,
+          itemId: submission.itemId,
+          files: run.files,
+        };
+      }
+    }
+    return null;
+  }
+  async completeRun(
+    runId: string,
+    submissionId: string,
+    data: { status: string; autoScore: number },
+  ) {
+    const run = this.runs.find((r) => r.id === runId);
+    if (run) run.status = data.status;
+    for (const attempt of this.state.attempts) {
+      const submission = attempt.submissions.find((s) => s.id === submissionId);
+      if (submission) submission.autoScore = data.autoScore;
+    }
+  }
+
   async applyGrading(attemptId: string, grades: GradeWrite[], finalize: FinalizeWrite) {
     const attempt = this.state.mustGet(attemptId);
     for (const grade of grades) {
@@ -213,10 +264,16 @@ function makeWorld() {
   const attemptRepo = new FakeAttemptRepo(world);
   const gradingRepo = new FakeGradingRepo(world);
   const attempts = new AttemptService({ assessments, attempts: attemptRepo, clock });
+  const finalizer = new AttemptFinalizer({
+    attempts: attemptRepo,
+    assessments,
+    grading: gradingRepo,
+    clock,
+  });
   const grading = new GradingService({
     grading: gradingRepo,
     attempts: attemptRepo,
-    assessments,
+    finalizer,
     clock,
   });
   return { world, clock, attempts, grading };

@@ -3,12 +3,33 @@ import http from 'node:http';
 import { loadEnv } from './config/env';
 import { buildContainer } from './container';
 import { createApp } from './app';
+import { createSocketServer } from './core/realtime/socket';
+import { startJudgeWorker } from './modules/judge/infrastructure/judgeQueue';
 
 async function main(): Promise<void> {
   const env = loadEnv();
   const container = await buildContainer(env);
   const app = createApp(container);
   const server = http.createServer(app);
+
+  // Realtime: authenticated sockets join user rooms; grading pushes land there.
+  const io = createSocketServer(server, container.tokenVerifier, env.WEB_ORIGIN);
+  container.eventBus.on('AttemptGraded', (event) => {
+    io.to(`user:${event.userId}`).emit('attempt:graded', {
+      assessmentId: event.assessmentId,
+      lessonId: event.lessonId,
+      passed: event.passed,
+      scorePct: event.scorePct,
+    });
+  });
+
+  // Judge worker (in-process for now; same code can run standalone later).
+  const judgeWorker = startJudgeWorker(
+    env.REDIS_URL,
+    container.judgeService,
+    env.JUDGE_CONCURRENCY,
+    container.logger,
+  );
 
   server.listen(env.PORT, () => {
     container.logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API listening');
@@ -19,9 +40,11 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     container.logger.info({ signal }, 'Shutting down');
+    io.close();
     server.close(() => {
-      container
-        .shutdown()
+      judgeWorker
+        .close()
+        .then(() => container.shutdown())
         .catch((err) => container.logger.error({ err }, 'Error during shutdown'))
         .finally(() => process.exit(0));
     });

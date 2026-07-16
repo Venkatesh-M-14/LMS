@@ -61,6 +61,7 @@ describe('gradeItem — MCQ', () => {
       autoScore: 2,
       correct: true,
       needsManual: false,
+      needsJudge: false,
     });
   });
 
@@ -69,6 +70,7 @@ describe('gradeItem — MCQ', () => {
       autoScore: 0,
       correct: false,
       needsManual: false,
+      needsJudge: false,
     });
   });
 
@@ -82,11 +84,21 @@ describe('gradeItem — MULTI_SELECT partial credit', () => {
   const answer = (ids: string[]) => gradeItem(multi, { selectedOptionIds: ids });
 
   it('full points for the exact correct set', () => {
-    expect(answer(['a', 'c'])).toEqual({ autoScore: 4, correct: true, needsManual: false });
+    expect(answer(['a', 'c'])).toEqual({
+      autoScore: 4,
+      correct: true,
+      needsManual: false,
+      needsJudge: false,
+    });
   });
 
   it('half points for one of two correct picks', () => {
-    expect(answer(['a'])).toEqual({ autoScore: 2, correct: false, needsManual: false });
+    expect(answer(['a'])).toEqual({
+      autoScore: 2,
+      correct: false,
+      needsManual: false,
+      needsJudge: false,
+    });
   });
 
   it('a wrong pick cancels a right one', () => {
@@ -143,6 +155,7 @@ describe('gradeItem — REFLECTION', () => {
       autoScore: null,
       correct: null,
       needsManual: true,
+      needsJudge: false,
     });
   });
 
@@ -151,6 +164,7 @@ describe('gradeItem — REFLECTION', () => {
       autoScore: 0,
       correct: null,
       needsManual: false,
+      needsJudge: false,
     });
     expect(gradeItem(reflection, null).needsManual).toBe(false);
   });

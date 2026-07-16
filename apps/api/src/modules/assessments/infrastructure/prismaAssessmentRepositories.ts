@@ -3,6 +3,8 @@ import {
   ASSESSMENT_ITEM_SCHEMA_VERSION,
   assessmentItemPayloadSchema,
   type AssessmentAuthoringView,
+  type ChallengeSummary,
+  type CodingPayload,
   type UpsertAssessmentRequest,
 } from '@academy/shared';
 import { NotFoundError } from '../../../core/errors/appError';
@@ -21,6 +23,7 @@ import type {
   GradingQueueRow,
   GradingRepository,
   ItemRecord,
+  RunRecord,
   SubmissionRecord,
 } from '../application/ports';
 
@@ -124,6 +127,48 @@ export class PrismaAssessmentRepository implements AssessmentRepository {
     });
     return lesson?.currentPublishedVersionId ?? null;
   }
+
+  async getChallengeFreeze(challengeId: string): Promise<CodingPayload | null> {
+    const challenge = await this.prisma.codingChallenge.findUnique({
+      where: { id: challengeId },
+      include: { testCases: { orderBy: { order: 'asc' } } },
+    });
+    if (!challenge) return null;
+    // Solutions are intentionally NOT part of the freeze — they must never
+    // reach snapshots (which get sanitized and sent to clients).
+    return {
+      challengeId: challenge.id,
+      title: challenge.title,
+      environment: challenge.environment,
+      instructionsMd: challenge.instructionsMd,
+      starterFiles: challenge.starterFiles as Record<string, string>,
+      timeLimitMs: challenge.timeLimitMs,
+      memoryLimitMb: challenge.memoryLimitMb,
+      tests: challenge.testCases.map((test) => ({
+        id: test.id,
+        name: test.name,
+        kind: test.kind,
+        specCode: test.specCode,
+        weight: test.weight,
+        isHidden: test.isHidden,
+        timeoutMs: test.timeoutMs,
+      })),
+    };
+  }
+
+  async listChallenges(): Promise<ChallengeSummary[]> {
+    const challenges = await this.prisma.codingChallenge.findMany({
+      orderBy: { title: 'asc' },
+      include: { _count: { select: { testCases: true } } },
+    });
+    return challenges.map((challenge) => ({
+      id: challenge.id,
+      slug: challenge.slug,
+      title: challenge.title,
+      environment: challenge.environment,
+      testCount: challenge._count.testCases,
+    }));
+  }
 }
 
 function toSubmissionRecord(row: {
@@ -133,7 +178,16 @@ function toSubmissionRecord(row: {
   autoScore: number | null;
   manualScore: number | null;
   graderFeedback: string;
+  executionRuns?: Array<{
+    id: string;
+    status: RunRecord['status'];
+    resultsJson: unknown;
+    stdout: string;
+    errorMessage: string;
+    durationMs: number | null;
+  }>;
 }): SubmissionRecord {
+  const latest = row.executionRuns?.[0];
   return {
     id: row.id,
     itemId: row.itemId,
@@ -141,8 +195,22 @@ function toSubmissionRecord(row: {
     autoScore: row.autoScore,
     manualScore: row.manualScore,
     graderFeedback: row.graderFeedback,
+    latestRun: latest
+      ? {
+          id: latest.id,
+          status: latest.status,
+          resultsJson: latest.resultsJson,
+          stdout: latest.stdout,
+          errorMessage: latest.errorMessage,
+          durationMs: latest.durationMs,
+        }
+      : null,
   };
 }
+
+const SUBMISSIONS_WITH_RUNS = {
+  include: { executionRuns: { orderBy: { createdAt: 'desc' as const }, take: 1 } },
+};
 
 export class PrismaAttemptRepository implements AttemptRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -158,7 +226,7 @@ export class PrismaAttemptRepository implements AttemptRepository {
   async findById(attemptId: string): Promise<AttemptRecord | null> {
     const row = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      include: { submissions: true },
+      include: { submissions: SUBMISSIONS_WITH_RUNS },
     });
     if (!row) return null;
     return { ...row, submissions: row.submissions.map(toSubmissionRecord) };
@@ -226,6 +294,70 @@ export class PrismaAttemptRepository implements AttemptRepository {
       });
     });
   }
+
+  async createExecutionRun(
+    itemSubmissionId: string,
+    files: Record<string, string>,
+  ): Promise<{ id: string }> {
+    const run = await this.prisma.executionRun.create({
+      data: { itemSubmissionId, submittedFiles: files },
+      select: { id: true },
+    });
+    return run;
+  }
+
+  async claimRun(runId: string) {
+    // Atomic claim: only one worker transitions QUEUED → RUNNING.
+    const claimed = await this.prisma.executionRun.updateMany({
+      where: { id: runId, status: 'QUEUED' },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    });
+    if (claimed.count === 0) return null;
+
+    const run = await this.prisma.executionRun.findUnique({
+      where: { id: runId },
+      include: { itemSubmission: { select: { id: true, itemId: true, attemptId: true } } },
+    });
+    if (!run) return null;
+    return {
+      runId: run.id,
+      submissionId: run.itemSubmission.id,
+      attemptId: run.itemSubmission.attemptId,
+      itemId: run.itemSubmission.itemId,
+      files: run.submittedFiles as Record<string, string>,
+    };
+  }
+
+  async completeRun(
+    runId: string,
+    submissionId: string,
+    data: {
+      status: 'PASSED' | 'FAILED' | 'TIMEOUT' | 'ERROR';
+      resultsJson: unknown;
+      stdout: string;
+      errorMessage: string;
+      durationMs: number;
+      autoScore: number;
+    },
+  ): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.executionRun.update({
+        where: { id: runId },
+        data: {
+          status: data.status,
+          resultsJson: data.resultsJson as Prisma.InputJsonValue,
+          stdout: data.stdout,
+          errorMessage: data.errorMessage,
+          durationMs: data.durationMs,
+          finishedAt: new Date(),
+        },
+      }),
+      this.prisma.itemSubmission.update({
+        where: { id: submissionId },
+        data: { autoScore: data.autoScore, gradedAt: new Date() },
+      }),
+    ]);
+  }
 }
 
 export class PrismaGradingRepository implements GradingRepository {
@@ -257,7 +389,7 @@ export class PrismaGradingRepository implements GradingRepository {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
       include: {
-        submissions: true,
+        submissions: SUBMISSIONS_WITH_RUNS,
         user: { select: { displayName: true } },
         assessment: { include: { lesson: { select: { title: true } } } },
       },

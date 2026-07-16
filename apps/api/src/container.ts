@@ -29,10 +29,15 @@ import {
 } from './modules/assessments/infrastructure/prismaAssessmentRepositories';
 import { AttemptService } from './modules/assessments/application/attemptService';
 import { GradingService } from './modules/assessments/application/gradingService';
+import { AttemptFinalizer } from './modules/assessments/application/attemptFinalizer';
 import { AssessmentAuthoringService } from './modules/assessments/application/assessmentAuthoringService';
 import { buildAssessmentsRouter } from './modules/assessments/http/assessmentsRouter';
 import { buildCmsAssessmentsRouter } from './modules/assessments/http/cmsAssessmentsRouter';
 import { EventBus } from './core/events/eventBus';
+import { JudgeService } from './modules/assessments/application/judgeService';
+import { BullJudgeQueue } from './modules/judge/infrastructure/judgeQueue';
+import { runInSandbox } from './modules/judge/infrastructure/subprocessSandbox';
+import type { JwtTokenService as JwtTokenServiceType } from './modules/auth/infrastructure/jwtTokenService';
 import { PrismaProgressRepository } from './modules/progress/infrastructure/prismaProgressRepository';
 import { ProgressService } from './modules/progress/application/progressService';
 import { buildProgressRouter } from './modules/progress/http/progressRouter';
@@ -54,6 +59,10 @@ export interface Container {
     progress: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
+  eventBus: EventBus;
+  judgeService: JudgeService;
+  judgeQueue: BullJudgeQueue;
+  tokenVerifier: JwtTokenServiceType;
   shutdown(): Promise<void>;
 }
 
@@ -112,21 +121,35 @@ export async function buildContainer(env: Env): Promise<Container> {
   const assessmentRepo = new PrismaAssessmentRepository(prisma);
   const attemptRepo = new PrismaAttemptRepository(prisma);
   const gradingRepo = new PrismaGradingRepository(prisma);
+  const judgeQueue = new BullJudgeQueue(env.REDIS_URL);
   const attemptService = new AttemptService({
     assessments: assessmentRepo,
     attempts: attemptRepo,
     clock,
     events: eventBus,
     accessGate: progressService,
+    judgeQueue,
+  });
+  const attemptFinalizer = new AttemptFinalizer({
+    attempts: attemptRepo,
+    assessments: assessmentRepo,
+    grading: gradingRepo,
+    clock,
+    events: eventBus,
   });
   const gradingService = new GradingService({
     grading: gradingRepo,
     attempts: attemptRepo,
-    assessments: assessmentRepo,
+    finalizer: attemptFinalizer,
     clock,
-    events: eventBus,
   });
   const assessmentAuthoring = new AssessmentAuthoringService(assessmentRepo);
+  const judgeService = new JudgeService({
+    attempts: attemptRepo,
+    sandbox: runInSandbox,
+    finalizer: attemptFinalizer,
+    logger,
+  });
 
   const globalRateLimiter = createRateLimiter({
     redis,
@@ -168,7 +191,12 @@ export async function buildContainer(env: Env): Promise<Container> {
       progress: buildProgressRouter({ progress: progressService, authenticate }),
     },
     globalRateLimiter,
+    eventBus,
+    judgeService,
+    judgeQueue,
+    tokenVerifier: jwtService,
     async shutdown() {
+      await judgeQueue.close();
       await prisma.$disconnect();
       redis.disconnect();
     },

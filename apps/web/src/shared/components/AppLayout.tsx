@@ -27,6 +27,7 @@ import { loggedOut } from '../../features/auth/authSlice';
 import { logoutUser } from '../../features/auth/api';
 import { SUPPORTED_LOCALES } from '../../app/i18n';
 import { queryClient } from '../../app/queryClient';
+import { useRealtime } from '../realtime/useRealtime';
 
 const THEME_OPTIONS: Array<{ mode: ThemeMode; labelKey: string; icon: ReactElement }> = [
   { mode: 'light', labelKey: 'nav.themeLight', icon: <LightModeIcon fontSize="small" /> },
@@ -39,6 +40,7 @@ const THEME_OPTIONS: Array<{ mode: ThemeMode; labelKey: string; icon: ReactEleme
 ];
 
 export function AppLayout() {
+  useRealtime();
   const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();

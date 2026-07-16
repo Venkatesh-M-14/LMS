@@ -1,6 +1,8 @@
 import type {
   AssessmentAuthoringView,
   AssessmentItemPayload,
+  ChallengeSummary,
+  CodingPayload,
   UpsertAssessmentRequest,
 } from '@academy/shared';
 import type { SnapshotItem } from '../domain/snapshot';
@@ -18,7 +20,7 @@ export interface AssessmentRecord {
 export interface ItemRecord {
   id: string;
   order: number;
-  type: 'MCQ' | 'MULTI_SELECT' | 'OUTPUT_PREDICTION' | 'REFLECTION';
+  type: 'MCQ' | 'MULTI_SELECT' | 'OUTPUT_PREDICTION' | 'REFLECTION' | 'CODING' | 'DEBUGGING';
   points: number;
   payload: unknown;
 }
@@ -38,6 +40,21 @@ export interface AssessmentRepository {
   replaceItems(assessmentId: string, items: AuthoringItemInput[]): Promise<void>;
   /** currentPublishedVersionId of the lesson the assessment hangs off (pin). */
   getLessonPublishedVersionId(lessonId: string): Promise<string | null>;
+  /**
+   * The full challenge (instructions, starter files, ALL tests — hidden
+   * included, solutions excluded) for freezing into an attempt snapshot.
+   */
+  getChallengeFreeze(challengeId: string): Promise<CodingPayload | null>;
+  listChallenges(): Promise<ChallengeSummary[]>;
+}
+
+export interface RunRecord {
+  id: string;
+  status: 'QUEUED' | 'RUNNING' | 'PASSED' | 'FAILED' | 'TIMEOUT' | 'ERROR';
+  resultsJson: unknown;
+  stdout: string;
+  errorMessage: string;
+  durationMs: number | null;
 }
 
 export interface SubmissionRecord {
@@ -47,6 +64,8 @@ export interface SubmissionRecord {
   autoScore: number | null;
   manualScore: number | null;
   graderFeedback: string;
+  /** Most recent judge run, if this submission was ever judged. */
+  latestRun?: RunRecord | null;
 }
 
 export interface AttemptRecord {
@@ -106,6 +125,38 @@ export interface AttemptRepository {
   ): Promise<void>;
   /** Atomically writes grades for every item and the attempt's final state. */
   applyGrading(attemptId: string, grades: GradeWrite[], finalize: FinalizeWrite): Promise<void>;
+
+  // ── Judge runs ────────────────────────────────────────────────────────────
+  createExecutionRun(
+    itemSubmissionId: string,
+    files: Record<string, string>,
+  ): Promise<{ id: string }>;
+  /** Claims a QUEUED run (sets RUNNING); returns null if already claimed/missing. */
+  claimRun(runId: string): Promise<{
+    runId: string;
+    submissionId: string;
+    attemptId: string;
+    itemId: string;
+    files: Record<string, string>;
+  } | null>;
+  /** Atomically: finish the run AND write the submission's autoScore. */
+  completeRun(
+    runId: string,
+    submissionId: string,
+    data: {
+      status: 'PASSED' | 'FAILED' | 'TIMEOUT' | 'ERROR';
+      resultsJson: unknown;
+      stdout: string;
+      errorMessage: string;
+      durationMs: number;
+      autoScore: number;
+    },
+  ): Promise<void>;
+}
+
+/** Enqueue port — implemented by the BullMQ adapter. */
+export interface JudgeQueuePort {
+  enqueue(runId: string): Promise<void>;
 }
 
 export interface GradingQueueRow {

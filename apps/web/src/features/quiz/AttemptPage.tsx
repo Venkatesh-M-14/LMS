@@ -84,6 +84,11 @@ function QuizTaker({ attempt }: { attempt: AttemptInProgress }) {
     if (typeof record.text === 'string') return record.text.trim().length > 0;
     if (typeof record.predictedOutput === 'string') return record.predictedOutput.trim().length > 0;
     if (Array.isArray(record.selectedOptionIds)) return record.selectedOptionIds.length > 0;
+    if (record.files && typeof record.files === 'object') {
+      return Object.values(record.files as Record<string, string>).some(
+        (content) => content.trim().length > 0,
+      );
+    }
     return true;
   }).length;
   const unanswered = attempt.items.length - answeredCount;
@@ -185,6 +190,9 @@ export function AttemptPage() {
     queryFn: () => fetchAttempt(attemptId),
     enabled: attemptId.length > 0,
     refetchOnWindowFocus: false,
+    // While the judge/instructor grade asynchronously, poll as a fallback to
+    // the socket push.
+    refetchInterval: (query) => (query.state.data?.status === 'GRADING' ? 2500 : false),
   });
 
   if (isPending) {

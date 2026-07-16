@@ -13,6 +13,8 @@ import { toTypedItem, type SnapshotItem } from './snapshot';
  */
 
 export interface ItemGrade {
+  /** CODING/DEBUGGING with a real answer: score comes from the async judge. */
+  needsJudge: boolean;
   /** Points earned; null while a reflection awaits manual grading. */
   autoScore: number | null;
   /** Binary correctness; null for reflections and partial credit ∈ (0,1). */
@@ -37,7 +39,7 @@ function gradeMcq(
   points: number,
 ): ItemGrade {
   const correct = answer.selectedOptionId === payload.correctOptionId;
-  return { autoScore: correct ? points : 0, correct, needsManual: false };
+  return { autoScore: correct ? points : 0, correct, needsManual: false, needsJudge: false };
 }
 
 /**
@@ -63,7 +65,7 @@ function gradeMultiSelect(
   const fraction = Math.max(0, (right - wrong) / correctSet.size);
   const autoScore = roundScore(points * fraction);
   const exact = right === correctSet.size && wrong === 0;
-  return { autoScore, correct: exact, needsManual: false };
+  return { autoScore, correct: exact, needsManual: false, needsJudge: false };
 }
 
 function gradeOutputPrediction(
@@ -74,7 +76,7 @@ function gradeOutputPrediction(
   const correct =
     normalizeOutput(answer.predictedOutput, payload.matchMode) ===
     normalizeOutput(payload.expectedOutput, payload.matchMode);
-  return { autoScore: correct ? points : 0, correct, needsManual: false };
+  return { autoScore: correct ? points : 0, correct, needsManual: false, needsJudge: false };
 }
 
 /**
@@ -85,7 +87,12 @@ function gradeOutputPrediction(
 export function gradeItem(item: SnapshotItem, rawAnswer: unknown): ItemGrade {
   const parsed = answerSchemaByType[item.type].safeParse(rawAnswer);
   if (!parsed.success) {
-    return { autoScore: 0, correct: item.type === 'REFLECTION' ? null : false, needsManual: false };
+    return {
+      autoScore: 0,
+      correct: item.type === 'REFLECTION' ? null : false,
+      needsManual: false,
+      needsJudge: false,
+    };
   }
 
   const typed = toTypedItem(item);
@@ -104,12 +111,22 @@ export function gradeItem(item: SnapshotItem, rawAnswer: unknown): ItemGrade {
         parsed.data as { predictedOutput: string },
         item.points,
       );
+    case 'CODING':
+    case 'DEBUGGING': {
+      const files = (parsed.data as { files: Record<string, string> }).files;
+      const hasCode = Object.values(files).some((content) => content.trim().length > 0);
+      if (!hasCode) {
+        return { autoScore: 0, correct: false, needsManual: false, needsJudge: false };
+      }
+      // Parked for the asynchronous judge — scored when the run completes.
+      return { autoScore: null, correct: null, needsManual: false, needsJudge: true };
+    }
     case 'REFLECTION': {
       const text = (parsed.data as { text: string }).text.trim();
       if (text.length === 0) {
-        return { autoScore: 0, correct: null, needsManual: false };
+        return { autoScore: 0, correct: null, needsManual: false, needsJudge: false };
       }
-      return { autoScore: null, correct: null, needsManual: true };
+      return { autoScore: null, correct: null, needsManual: true, needsJudge: false };
     }
   }
 }
@@ -122,4 +139,17 @@ export function roundScore(value: number): number {
 export function toScorePct(rawScore: number, maxScore: number): number {
   if (maxScore <= 0) return 0;
   return Math.round((rawScore / maxScore) * 1000) / 10;
+}
+
+/** Weighted judge score: points × (passed weight / total weight). */
+export function scoreFromRunResults(
+  points: number,
+  results: Array<{ passed: boolean; weight: number }>,
+): number {
+  const totalWeight = results.reduce((sum, result) => sum + result.weight, 0);
+  if (totalWeight <= 0) return 0;
+  const passedWeight = results
+    .filter((result) => result.passed)
+    .reduce((sum, result) => sum + result.weight, 0);
+  return roundScore(points * (passedWeight / totalWeight));
 }

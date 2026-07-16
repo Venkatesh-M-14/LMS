@@ -71,6 +71,9 @@ export function defaultQuizItem(type: AssessmentItemType): AssessmentItemPayload
       };
     case 'REFLECTION':
       return { type, payload: { prompt: '' } };
+    case 'CODING':
+    case 'DEBUGGING':
+      return { type, payload: { challengeId: '' } };
   }
 }
 
@@ -155,6 +158,7 @@ interface QuizItemEditorProps {
   total: number;
   value: EditableQuizItem;
   skillOptions: Array<{ id: string; name: string }>;
+  challengeOptions: Array<{ id: string; title: string; environment: string }>;
   onChange: (value: EditableQuizItem) => void;
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
@@ -165,6 +169,7 @@ export function QuizItemEditor({
   total,
   value,
   skillOptions,
+  challengeOptions,
   onChange,
   onMove,
   onDelete,
@@ -307,6 +312,27 @@ export function QuizItemEditor({
               multiline
               fullWidth
             />
+          </Stack>
+        );
+      case 'CODING':
+      case 'DEBUGGING':
+        return (
+          <Stack spacing={2}>
+            <TextField
+              select
+              label={t('cms.quiz.challenge')}
+              value={item.payload.challengeId}
+              onChange={(e) => patchPayload({ challengeId: e.target.value })}
+              helperText={t('cms.quiz.challengeHelp')}
+              sx={{ maxWidth: 480 }}
+              required
+            >
+              {challengeOptions.map((challenge) => (
+                <MenuItem key={challenge.id} value={challenge.id}>
+                  {challenge.title} ({challenge.environment})
+                </MenuItem>
+              ))}
+            </TextField>
           </Stack>
         );
       case 'REFLECTION':

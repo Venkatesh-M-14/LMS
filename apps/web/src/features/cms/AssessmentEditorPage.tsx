@@ -27,6 +27,7 @@ import { ApiClientError } from '../../shared/api/client';
 import { quizKeys } from '../quiz/api';
 import {
   cmsKeys,
+  fetchChallenges,
   fetchCmsLessons,
   fetchLessonAssessment,
   fetchSkills,
@@ -59,6 +60,7 @@ export function AssessmentEditorPage() {
     enabled: lessonId.length > 0,
   });
   const skillsQuery = useQuery({ queryKey: cmsKeys.skills, queryFn: fetchSkills });
+  const challengesQuery = useQuery({ queryKey: cmsKeys.challenges, queryFn: fetchChallenges });
   const lessonsQuery = useQuery({ queryKey: cmsKeys.lessons, queryFn: fetchCmsLessons });
   const lesson = useMemo(
     () => lessonsQuery.data?.find((l) => l.id === lessonId) ?? null,
@@ -306,6 +308,7 @@ export function AssessmentEditorPage() {
                 total={items.length}
                 value={item}
                 skillOptions={skillsQuery.data ?? []}
+                challengeOptions={challengesQuery.data ?? []}
                 onChange={(value) => updateItem(index, value)}
                 onMove={(direction) => moveItem(index, direction)}
                 onDelete={() => deleteItem(index)}

@@ -1,4 +1,4 @@
-# API Reference — Milestones 1–4
+# API Reference — Milestones 1–5
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -105,6 +105,13 @@ Errors: `ATTEMPT_LIMIT_REACHED` 409 · `COOLDOWN_ACTIVE` 429 · `ATTEMPT_NOT_IN_
 | `POST /cms/grading/submissions/:id`     | `{ score ≤ item points, feedback }`; grading the last reflection finalizes the attempt                     |
 
 Errors: `SUBMISSION_NOT_PENDING` 409 · `SCORE_EXCEEDS_POINTS` 422
+
+## Judge & coding items
+
+- CODING/DEBUGGING items live inside quizzes; the in-progress payload carries `starterFiles`, `visibleTests` (spec included) and `hiddenTestCount` — hidden specs never leave the server, even after grading.
+- Answers are `{ files: { "path": "content" } }` (≤5 files, ≤50 KB each).
+- Submit puts the attempt in `GRADING` while the judge runs; results (`ItemResult.run`) carry per-test verdicts (hidden tests show name+verdict only), stdout, and status `PASSED | FAILED | TIMEOUT | ERROR`. Socket.IO emits `attempt:graded` to `user:<id>` rooms (JWT handshake via `auth.token`).
+- `GET /cms/challenges` _(INSTRUCTOR)_ lists challenges for the quiz editor.
 
 ## Progress _(Bearer token)_
 

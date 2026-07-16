@@ -1,5 +1,6 @@
 import type {
   AssessmentAuthoringView,
+  ChallengeSummary,
   ReplaceItemsRequest,
   UpsertAssessmentRequest,
 } from '@academy/shared';
@@ -16,6 +17,10 @@ export class AssessmentAuthoringService {
 
   getForLesson(lessonId: string): Promise<AssessmentAuthoringView | null> {
     return this.repo.getAuthoringView(lessonId);
+  }
+
+  listChallenges(): Promise<ChallengeSummary[]> {
+    return this.repo.listChallenges();
   }
 
   async upsertForLesson(
