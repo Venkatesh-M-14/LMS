@@ -43,6 +43,8 @@ export function createApp(container: Container): Express {
   app.use(container.globalRateLimiter);
   app.use('/api/v1/auth', routers.auth);
   app.use('/api/v1/users', routers.users);
+  app.use('/api/v1/curriculum', routers.curriculum);
+  app.use('/api/v1/cms', routers.cms);
 
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));

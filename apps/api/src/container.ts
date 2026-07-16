@@ -17,6 +17,11 @@ import { LogoutUser } from './modules/auth/application/logoutUser';
 import { buildAuthRouter } from './modules/auth/http/authRouter';
 import { buildUsersRouter } from './modules/users/http/usersRouter';
 import { buildHealthRouter } from './modules/health/http/healthRouter';
+import { PrismaAuthoringRepository } from './modules/cms/infrastructure/prismaAuthoringRepository';
+import { LessonAuthoringService } from './modules/cms/application/lessonAuthoringService';
+import { buildCmsRouter } from './modules/cms/http/cmsRouter';
+import { CurriculumQueryService } from './modules/curriculum/application/curriculumQueryService';
+import { buildCurriculumRouter } from './modules/curriculum/http/curriculumRouter';
 import type { Router } from 'express';
 
 export interface Container {
@@ -28,6 +33,8 @@ export interface Container {
     auth: Router;
     users: Router;
     health: Router;
+    curriculum: Router;
+    cms: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   shutdown(): Promise<void>;
@@ -77,6 +84,9 @@ export async function buildContainer(env: Env): Promise<Container> {
 
   const authenticate = createAuthenticate(jwtService);
 
+  const authoring = new LessonAuthoringService(new PrismaAuthoringRepository(prisma));
+  const curriculum = new CurriculumQueryService(prisma);
+
   const globalRateLimiter = createRateLimiter({
     redis,
     prefix: 'global',
@@ -106,6 +116,8 @@ export async function buildContainer(env: Env): Promise<Container> {
       }),
       users: buildUsersRouter({ users, prisma, authenticate }),
       health: buildHealthRouter({ prisma, redis }),
+      curriculum: buildCurriculumRouter({ curriculum, authenticate }),
+      cms: buildCmsRouter({ authoring, authenticate }),
     },
     globalRateLimiter,
     async shutdown() {

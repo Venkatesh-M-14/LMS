@@ -1,5 +1,6 @@
 import { useState, type MouseEvent, type ReactElement } from 'react';
-import { Outlet, useNavigate } from 'react-router';
+import { Link as RouterLink, Outlet, useNavigate } from 'react-router';
+import Button from '@mui/material/Button';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -78,9 +79,27 @@ export function AppLayout() {
       >
         <Toolbar sx={{ gap: 1 }}>
           <SchoolIcon color="primary" aria-hidden />
-          <Typography variant="h6" component="span" sx={{ fontWeight: 700, flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            component="span"
+            sx={{ fontWeight: 700, display: { xs: 'none', md: 'block' } }}
+          >
             {t('app.name')}
           </Typography>
+
+          <Box component="nav" sx={{ display: 'flex', gap: 0.5, ml: 2, flexGrow: 1 }}>
+            <Button component={RouterLink} to="/" color="inherit" size="small">
+              {t('nav.dashboard')}
+            </Button>
+            <Button component={RouterLink} to="/curriculum" color="inherit" size="small">
+              {t('nav.curriculum')}
+            </Button>
+            {user && (user.role === 'INSTRUCTOR' || user.role === 'ADMIN') ? (
+              <Button component={RouterLink} to="/instructor" color="inherit" size="small">
+                {t('nav.instructor')}
+              </Button>
+            ) : null}
+          </Box>
 
           <Tooltip title={t('nav.theme')}>
             <IconButton aria-label={t('nav.theme')} onClick={openMenu(setThemeAnchor)}>

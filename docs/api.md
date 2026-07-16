@@ -1,4 +1,4 @@
-# API Reference — Milestone 1
+# API Reference — Milestones 1–2
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -51,6 +51,35 @@ Returns the authenticated user's DTO. Errors: `UNAUTHORIZED` 401 · `NOT_FOUND` 
 
 `data`: array of user DTOs · `meta`: `{ page, pageSize, total }`
 Errors: `UNAUTHORIZED` 401 · `FORBIDDEN` 403 (non-admin)
+
+## Curriculum _(Bearer token)_
+
+### GET /curriculum/path → 200
+
+The active path as a tree: `{ id, slug, title, description, modules[] }` → modules `{ …, topics[] }` → topics `{ …, depth: AUTHORED|OUTLINE, lessons[] }` → lessons `{ id, slug, title, order, estimatedMinutes, isPublished }`. Draft-only lessons appear with `isPublished: false`; students should not link to them.
+
+### GET /curriculum/lessons/:lessonId → 200
+
+Published content only, pinned to a version: `{ lessonId, versionId, versionNumber, title, topic, module, skills[], blocks[], publishedAt }`. Blocks: `{ id, order, type, payload, payloadSchemaVersion }`.
+Errors: `NOT_FOUND` 404 · `LESSON_NOT_PUBLISHED` 404
+
+## CMS _(Bearer token, INSTRUCTOR or ADMIN)_
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /cms/lessons` | All lessons with topic/module, skills, published version, latest version |
+| `POST /cms/lessons` | Create lesson (+ empty v1 draft). Body: `{ topicId, slug, title, estimatedMinutes }` |
+| `PUT /cms/lessons/:id/skills` | Replace skill tags. Body: `{ skillIds[] }` |
+| `GET /cms/skills` | All skills |
+| `GET /cms/lessons/:id/versions` | Version history (newest first) |
+| `POST /cms/lessons/:id/versions` | New draft (blocks copied from published). Body: `{ changelog? }` |
+| `GET /cms/lesson-versions/:id` | Version detail incl. blocks |
+| `PUT /cms/lesson-versions/:id/blocks` | Replace a draft's blocks atomically. Body: `{ blocks: [{type, payload}] }` |
+| `POST /cms/lesson-versions/:id/submit` | DRAFT → IN_REVIEW |
+| `POST /cms/lesson-versions/:id/publish` | IN_REVIEW → PUBLISHED (archives previous, repoints lesson) |
+| `POST /cms/lesson-versions/:id/reject` | IN_REVIEW → DRAFT. Body: `{ reviewNotes }` |
+
+Workflow error codes: `VERSION_NOT_EDITABLE` 409 · `INVALID_STATUS_TRANSITION` 409 · `OPEN_DRAFT_EXISTS` 409 · `REVIEWER_CANNOT_BE_AUTHOR` 403 · `SKILLS_REQUIRED_TO_PUBLISH` 422 · `EMPTY_VERSION_CANNOT_ADVANCE` 422 · `CONFLICT` 409 (concurrent transition lost the race)
 
 ## Operational
 

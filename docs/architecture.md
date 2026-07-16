@@ -64,6 +64,23 @@ Rules:
 - **i18n**: `i18next` with typed message catalogs (`ta` must satisfy `Messages` = shape of `en`, so missing keys fail typecheck).
 - **Error handling**: a provider-independent root error boundary (no MUI/i18n/store dependencies — any of those could be the thing that crashed).
 
+## Content model (M2)
+
+Identity rows are stable — URLs, progress, and (from M4) gating point at them; content lives on versions:
+
+```
+Path ─▶ Module ─▶ Topic ─▶ Lesson ─▶ LessonVersion ─▶ ContentBlock
+        (order)   (depth:            (status, author,   (order, type,
+                   AUTHORED|OUTLINE)  reviewer)          JSON payload)
+```
+
+- **Version workflow**: `DRAFT → IN_REVIEW → PUBLISHED → ARCHIVED`. Rules live in one pure domain module ([workflow.ts](../apps/api/src/modules/cms/domain/workflow.ts)): drafts only are editable; empty versions cannot advance; **four-eyes** — the publisher must not be the author (admins exempt); publishing requires ≥1 skill tag; one open (draft/in-review) version per lesson.
+- **One PUBLISHED version per lesson** is guaranteed three ways: application rule, transactional archive-then-publish, and a Postgres partial unique index (`WHERE status = 'PUBLISHED'`).
+- **Immutable reads**: students read through `lesson.currentPublishedVersionId`; the response pins `versionId`, and a republish swaps the pointer atomically — it never mutates content someone already fetched.
+- **Content blocks** are a typed JSON discriminated union (`MARKDOWN | CODE | CALLOUT | VIDEO | IMAGE | EMBED`) validated by shared Zod schemas on write *and* re-validated on render (a malformed block degrades to a warning, never a crash). Each row carries `payloadSchemaVersion` for future migrations.
+- **Skills** tag lessons now and assessment items later (M3) — they are the signal the adaptive-learning engine (M8) runs on, which is why publishing without tags is refused from day one.
+- **Seed**: 9 modules / 31 topics / 35 skills; topics 1–2 fully authored (7 published lessons). Re-seeding never overwrites CMS work (content is only created for version-less lessons).
+
 ## Decisions & trade-offs (M1)
 
 | Decision                               | Rationale                                                                                                                                         |
