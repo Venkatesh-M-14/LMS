@@ -4,6 +4,7 @@ import argon2 from 'argon2';
 import { MODULES_SEED, PATH_SEED } from './seedData/curriculum';
 import { LESSONS_SEED } from './seedData/lessons';
 import { QUIZZES_SEED } from './seedData/quizzes';
+import { generateDefaultRules } from '../src/modules/progress/domain/gating';
 
 /**
  * Development/demo seed. Idempotent: structure rows are upserted by slug;
@@ -197,9 +198,14 @@ async function seedQuizzes(prisma: PrismaClient) {
     const lesson = await prisma.lesson.findFirst({ where: { slug: quiz.lessonSlug } });
     if (!lesson) throw new Error(`Seed bug: no lesson with slug ${quiz.lessonSlug}`);
 
-    // Never clobber CMS-authored quizzes: skip lessons that already have one.
+    // Never clobber CMS-authored questions; settings are kept in sync though,
+    // so threshold tuning in the seed reaches existing dev databases.
     const existing = await prisma.assessment.findUnique({ where: { lessonId: lesson.id } });
     if (existing) {
+      await prisma.assessment.update({
+        where: { id: existing.id },
+        data: { title: quiz.title, passingScorePct: quiz.passingScorePct },
+      });
       skipped++;
       continue;
     }
@@ -244,6 +250,42 @@ async function seedQuizzes(prisma: PrismaClient) {
   console.warn(`Seeded quizzes: ${created} created, ${skipped} left untouched`);
 }
 
+async function seedPrerequisiteRules(prisma: PrismaClient) {
+  const path = await prisma.path.findFirst({
+    where: { isActive: true },
+    include: {
+      modules: {
+        orderBy: { order: 'asc' },
+        include: {
+          topics: {
+            orderBy: { order: 'asc' },
+            include: { lessons: { orderBy: { order: 'asc' }, select: { id: true, order: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!path) throw new Error('Seed bug: no active path');
+
+  const structure = path.modules.map((module) => ({
+    id: module.id,
+    order: module.order,
+    topics: module.topics.map((topic) => ({
+      id: topic.id,
+      order: topic.order,
+      lessons: topic.lessons.map((lesson) => ({
+        id: lesson.id,
+        order: lesson.order,
+        published: true,
+      })),
+    })),
+  }));
+
+  const rules = generateDefaultRules(structure);
+  const result = await prisma.prerequisiteRule.createMany({ data: rules, skipDuplicates: true });
+  console.warn(`Seeded prerequisite rules: ${result.count} new (${rules.length} total defaults)`);
+}
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed a production database');
@@ -255,6 +297,7 @@ async function main(): Promise<void> {
     const topicIdBySlug = await seedCurriculum(prisma);
     await seedLessons(prisma, topicIdBySlug, instructor.id, admin.id);
     await seedQuizzes(prisma);
+    await seedPrerequisiteRules(prisma);
   } finally {
     await prisma.$disconnect();
   }

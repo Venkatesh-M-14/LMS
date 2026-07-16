@@ -37,6 +37,10 @@ export const ErrorCodes = {
   ANSWER_INVALID: 'ANSWER_INVALID',
   SUBMISSION_NOT_PENDING: 'SUBMISSION_NOT_PENDING',
   SCORE_EXCEEDS_POINTS: 'SCORE_EXCEEDS_POINTS',
+
+  // Progress & gating
+  GATING_LOCKED: 'GATING_LOCKED',
+  LESSON_HAS_QUIZ: 'LESSON_HAS_QUIZ',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

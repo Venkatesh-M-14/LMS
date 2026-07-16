@@ -98,6 +98,14 @@ Attempt (per student: itemsSnapshot ❄, pinned lessonVersionId)
 - **Attempt admission** (resume-first, then max-attempts, then cooldown) is a pure policy function; limits and cooldowns are per-assessment settings.
 - **Autosave + submit-flush**: the client debounces answer saves and also sends the full answer set with submit, so a lost autosave can't lose work.
 
+## Progress & gating (M4)
+
+- **Derived availability, persisted achievement.** Only `IN_PROGRESS`/`COMPLETED` are stored (`ProgressRecord`, polymorphic over lesson/topic/module). `LOCKED`/`AVAILABLE` are computed on every read from `PrerequisiteRule` + completions ([gating.ts](../apps/api/src/modules/progress/domain/gating.ts)) — there is no unlock state to corrupt or race.
+- **Rules are data.** Defaults (strictly sequential lessons, topics, modules; optional `minScorePct`) are generated from curriculum order at seed time and live in a table admins can edit later.
+- **Exactly-once completion.** `completeUnit` uses an atomic transition guard (`updateMany … WHERE status != COMPLETED`, unique row per user/unit): under concurrent quiz submissions only one caller performs each transition, while best scores take the maximum seen. The cascade lesson → topic → module runs on the `AttemptGraded` event (both immediate grading and the manual-grading finalize publish it via the typed in-process EventBus).
+- **Server-side enforcement, twice.** Students hitting a locked lesson get `GATING_LOCKED` 403 on the content read _and_ on quiz attempt start; the UI's disabled rows are hints, never the mechanism. Instructors/admins bypass gating (they author and review).
+- **Completion semantics.** A lesson with a quiz completes by passing it; a quizless lesson completes via an explicit mark-complete endpoint. Topics complete when all their _published_ lessons complete (outline topics never complete and never block); modules complete from their content-bearing topics.
+
 ## Decisions & trade-offs (M1)
 
 | Decision                               | Rationale                                                                                                                                         |

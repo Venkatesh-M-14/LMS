@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link as RouterLink } from 'react-router';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Breadcrumbs from '@mui/material/Breadcrumbs';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
@@ -10,15 +11,22 @@ import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import LockIcon from '@mui/icons-material/Lock';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useTranslation } from 'react-i18next';
 import { ApiClientError } from '../../shared/api/client';
 import { curriculumKeys, fetchLessonRead } from './api';
 import { BlockRenderer } from './components/BlockRenderer';
 import { QuizCard } from '../quiz/components/QuizCard';
+import { fetchQuizSummary, quizKeys } from '../quiz/api';
+import { fetchProgressMap, markLessonComplete, progressKeys } from '../progress/api';
 
 export function LessonPage() {
   const { t } = useTranslation();
   const { lessonId = '' } = useParams();
+  const queryClient = useQueryClient();
   const {
     data: lesson,
     isPending,
@@ -27,6 +35,18 @@ export function LessonPage() {
     queryKey: curriculumKeys.lesson(lessonId),
     queryFn: () => fetchLessonRead(lessonId),
     enabled: lessonId.length > 0,
+    retry: false,
+  });
+  const { data: progress } = useQuery({ queryKey: progressKeys.map, queryFn: fetchProgressMap });
+  const { data: quizSummary } = useQuery({
+    queryKey: quizKeys.summary(lessonId),
+    queryFn: () => fetchQuizSummary(lessonId),
+    enabled: lessonId.length > 0 && !error,
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => markLessonComplete(lessonId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: progressKeys.map }),
   });
 
   if (isPending) {
@@ -38,12 +58,34 @@ export function LessonPage() {
   }
   if (error || !lesson) {
     const notPublished = error instanceof ApiClientError && error.code === 'LESSON_NOT_PUBLISHED';
+    const locked = error instanceof ApiClientError && error.code === 'GATING_LOCKED';
+    if (locked) {
+      return (
+        <Alert
+          severity="info"
+          icon={<LockIcon />}
+          action={
+            <Button component={RouterLink} to="/curriculum" size="small">
+              {t('nav.curriculum')}
+            </Button>
+          }
+        >
+          <Typography sx={{ fontWeight: 600 }}>{t('progress.lockedTitle')}</Typography>
+          {t('progress.lockedBody')}
+        </Alert>
+      );
+    }
     return (
       <Alert severity={notPublished ? 'info' : 'error'}>
         {notPublished ? t('curriculum.notPublished') : t('curriculum.loadError')}
       </Alert>
     );
   }
+
+  const lessonProgress = progress?.lessons[lesson.lessonId];
+  const isCompleted = lessonProgress?.status === 'COMPLETED';
+  const hasQuiz = quizSummary != null;
+  const nextLessonId = progress?.nextLessonId ?? null;
 
   return (
     <Box sx={{ maxWidth: 780, mx: 'auto' }}>
@@ -64,6 +106,14 @@ export function LessonPage() {
           icon={<AccessTimeIcon />}
           label={t('curriculum.minutes', { count: lesson.estimatedMinutes })}
         />
+        {isCompleted ? (
+          <Chip
+            size="small"
+            color="success"
+            icon={<CheckCircleIcon />}
+            label={t('progress.completed')}
+          />
+        ) : null}
         {lesson.skills.map((skill) => (
           <Chip key={skill.id} size="small" variant="outlined" label={skill.name} />
         ))}
@@ -76,6 +126,37 @@ export function LessonPage() {
       <BlockRenderer blocks={lesson.blocks} />
 
       <QuizCard lessonId={lesson.lessonId} />
+
+      {!hasQuiz && !isCompleted ? (
+        <Box sx={{ mt: 4 }}>
+          <Button
+            variant="contained"
+            startIcon={<TaskAltIcon />}
+            disabled={completeMutation.isPending}
+            onClick={() => completeMutation.mutate()}
+          >
+            {t('progress.markComplete')}
+          </Button>
+          {completeMutation.isError ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {t('progress.markCompleteFailed')}
+            </Alert>
+          ) : null}
+        </Box>
+      ) : null}
+
+      {isCompleted && nextLessonId && nextLessonId !== lesson.lessonId ? (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 4 }}>
+          <Button
+            component={RouterLink}
+            to={`/lessons/${nextLessonId}`}
+            variant="outlined"
+            endIcon={<ArrowForwardIcon />}
+          >
+            {t('progress.nextLesson')}
+          </Button>
+        </Stack>
+      ) : null}
     </Box>
   );
 }

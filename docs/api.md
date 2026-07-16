@@ -1,4 +1,4 @@
-# API Reference — Milestones 1–3
+# API Reference — Milestones 1–4
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -105,6 +105,15 @@ Errors: `ATTEMPT_LIMIT_REACHED` 409 · `COOLDOWN_ACTIVE` 429 · `ATTEMPT_NOT_IN_
 | `POST /cms/grading/submissions/:id`     | `{ score ≤ item points, feedback }`; grading the last reflection finalizes the attempt                     |
 
 Errors: `SUBMISSION_NOT_PENDING` 409 · `SCORE_EXCEEDS_POINTS` 422
+
+## Progress _(Bearer token)_
+
+| Endpoint                              | Purpose                                                                                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /progress/map`                   | Effective statuses for every unit (`LOCKED/AVAILABLE/IN_PROGRESS/COMPLETED` + best scores), `nextLessonId`, lesson counts. Auto-enrolls students in the active path. |
+| `POST /progress/lessons/:id/complete` | Manual completion — only for lessons **without** a quiz (`LESSON_HAS_QUIZ` 409 otherwise). Returns `{ lessonCompleted, topicCompleted, moduleCompleted }`.           |
+
+Gating errors elsewhere: `GET /curriculum/lessons/:id` and `POST /assessments/:id/attempts` return `GATING_LOCKED` 403 for students whose prerequisites are unmet (instructors/admins bypass).
 
 ## Operational
 

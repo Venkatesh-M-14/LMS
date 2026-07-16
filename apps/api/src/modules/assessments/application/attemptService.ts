@@ -9,7 +9,9 @@ import {
   type ItemResult,
 } from '@academy/shared';
 import { AppError, ForbiddenError, NotFoundError } from '../../../core/errors/appError';
+import type { Role } from '@academy/shared';
 import type { Clock } from '../../auth/application/ports';
+import type { EventBus } from '../../../core/events/eventBus';
 import { evaluateStartPolicy } from '../domain/attemptPolicy';
 import { gradeItem, roundScore, toScorePct } from '../domain/grading';
 import { parseSnapshot, toStudentItems, toTypedItem, type SnapshotItem } from '../domain/snapshot';
@@ -25,6 +27,12 @@ export interface AttemptServiceDeps {
   assessments: AssessmentRepository;
   attempts: AttemptRepository;
   clock: Clock;
+  /** Publishes AttemptGraded — progress (and later gamification) subscribe. */
+  events?: EventBus;
+  /** Gating port from the progress module: may a student start this quiz? */
+  accessGate?: {
+    assertLessonAccessible(actor: { id: string; role: Role }, lessonId: string): Promise<void>;
+  };
   /** Injectable for deterministic shuffle tests. */
   random?: () => number;
 }
@@ -80,9 +88,18 @@ export class AttemptService {
   }
 
   /** Starts (or resumes) an attempt; the snapshot freezes items at this moment. */
-  async start(assessmentId: string, userId: string): Promise<AttemptInProgress> {
+  async start(
+    assessmentId: string,
+    userId: string,
+    role: Role = 'STUDENT',
+  ): Promise<AttemptInProgress> {
     const assessment = await this.deps.assessments.findById(assessmentId);
     if (!assessment) throw new NotFoundError('Assessment not found');
+
+    // Gating: a locked lesson's quiz cannot be started either.
+    if (assessment.lessonId && this.deps.accessGate) {
+      await this.deps.accessGate.assertLessonAccessible({ id: userId, role }, assessment.lessonId);
+    }
 
     const facts = await this.deps.attempts.listFacts(userId, assessmentId);
     const decision = evaluateStartPolicy(assessment, facts, this.deps.clock.now());
@@ -201,15 +218,26 @@ export class AttemptService {
     rawScore = roundScore(rawScore);
     const scorePct = needsManual ? null : toScorePct(rawScore, maxScore);
 
+    const passed = needsManual ? null : scorePct! >= assessment.passingScorePct;
     await this.deps.attempts.applyGrading(attemptId, grades, {
       status: needsManual ? 'GRADING' : 'GRADED',
       rawScore: needsManual ? null : rawScore,
       maxScore,
       scorePct,
-      passed: needsManual ? null : scorePct! >= assessment.passingScorePct,
+      passed,
       submittedAt: now,
       gradedAt: needsManual ? null : now,
     });
+
+    if (!needsManual && this.deps.events) {
+      await this.deps.events.emit('AttemptGraded', {
+        userId,
+        assessmentId: assessment.id,
+        lessonId: assessment.lessonId,
+        passed: passed!,
+        scorePct: scorePct!,
+      });
+    }
 
     const graded = await this.deps.attempts.findById(attemptId);
     return this.toResult(graded!, assessment);

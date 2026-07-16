@@ -6,6 +6,7 @@ import {
 } from '@academy/shared';
 import { AppError, NotFoundError } from '../../../core/errors/appError';
 import type { Clock } from '../../auth/application/ports';
+import type { EventBus } from '../../../core/events/eventBus';
 import { roundScore, toScorePct } from '../domain/grading';
 import { parseSnapshot, toTypedItem } from '../domain/snapshot';
 import type { AssessmentRepository, AttemptRepository, GradingRepository } from './ports';
@@ -15,6 +16,7 @@ export interface GradingServiceDeps {
   attempts: AttemptRepository;
   assessments: AssessmentRepository;
   clock: Clock;
+  events?: EventBus;
 }
 
 /** Instructor-side manual grading of reflection answers. */
@@ -138,13 +140,24 @@ export class GradingService {
     );
     const scorePct = toScorePct(rawScore, maxScore);
 
+    const passed = scorePct >= assessment.passingScorePct;
     await this.deps.grading.finalizeAttempt(refreshed.id, {
       status: 'GRADED',
       rawScore,
       maxScore,
       scorePct,
-      passed: scorePct >= assessment.passingScorePct,
+      passed,
       gradedAt: now,
     });
+
+    if (this.deps.events) {
+      await this.deps.events.emit('AttemptGraded', {
+        userId: refreshed.userId,
+        assessmentId: assessment.id,
+        lessonId: assessment.lessonId,
+        passed,
+        scorePct,
+      });
+    }
   }
 }

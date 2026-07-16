@@ -22,7 +22,7 @@ export const QUIZZES_SEED: QuizSeed[] = [
   {
     lessonSlug: 'how-a-computer-works',
     title: 'Quiz: How a Computer Works',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -104,7 +104,7 @@ const program = [
   {
     lessonSlug: 'bits-bytes-and-binary',
     title: 'Quiz: Bits, Bytes, and Binary',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -182,7 +182,7 @@ const program = [
   {
     lessonSlug: 'from-source-code-to-execution',
     title: 'Quiz: From Source Code to Execution',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -263,7 +263,7 @@ const program = [
   {
     lessonSlug: 'thinking-in-algorithms',
     title: 'Quiz: Thinking in Algorithms',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -346,7 +346,7 @@ console.log(binarySearch([2, 5, 8, 12, 16, 23, 38], 23));`,
   {
     lessonSlug: 'processes-and-threads',
     title: 'Quiz: Processes & Threads',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -425,7 +425,7 @@ console.log(binarySearch([2, 5, 8, 12, 16, 23, 38], 23));`,
   {
     lessonSlug: 'memory-storage-and-file-systems',
     title: 'Quiz: Memory, Storage & File Systems',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,
@@ -503,7 +503,7 @@ console.log(binarySearch([2, 5, 8, 12, 16, 23, 38], 23));`,
   {
     lessonSlug: 'meet-the-command-line',
     title: 'Quiz: The Command Line',
-    passingScorePct: 70,
+    passingScorePct: 65,
     items: [
       {
         points: 2,

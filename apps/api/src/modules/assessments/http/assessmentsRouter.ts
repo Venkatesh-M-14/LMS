@@ -25,7 +25,10 @@ export function buildAssessmentsRouter(deps: AssessmentsRouterDeps): Router {
   router.post(
     '/:assessmentId/attempts',
     asyncHandler(async (req, res) => {
-      created(res, await deps.attempts.start(req.params.assessmentId as string, req.user!.id));
+      created(
+        res,
+        await deps.attempts.start(req.params.assessmentId as string, req.user!.id, req.user!.role),
+      );
     }),
   );
 

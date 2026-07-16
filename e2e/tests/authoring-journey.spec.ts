@@ -90,18 +90,21 @@ test('instructor authors → admin publishes → student reads', async ({ page }
   await publishButton.click();
   await expect(page.getByText(/^published$/i).first()).toBeVisible();
 
-  // ── Student: reads the published lesson ───────────────────────────────────
+  // ── Admin (gating bypass): the published content is readable ──────────────
+  await page.getByRole('link', { name: /view as student/i }).click();
+  await expect(page.getByRole('heading', { name: `Hello from E2E ${stamp}` })).toBeVisible();
+  await expect(page.getByText(/authored by the test/i)).toBeVisible();
+
+  // ── Student: the lesson is now listed — but gated behind earlier topics ───
   await logout(page);
   await login(page, 'student@academy.local');
   await page
     .getByRole('navigation')
     .getByRole('link', { name: /curriculum/i })
     .click();
-
-  // The lesson lives in module 01 → Browser Internals (module is expanded by default).
-  await page.getByText(title).first().click();
-  await expect(page.getByRole('heading', { name: `Hello from E2E ${stamp}` })).toBeVisible();
-  await expect(page.getByText(/authored by the test/i)).toBeVisible();
+  const publishedLesson = page.getByRole('link', { name: title });
+  await expect(publishedLesson).toBeVisible();
+  await expect(publishedLesson).toHaveAttribute('aria-disabled', 'true');
 });
 
 test('students cannot open the instructor portal', async ({ page }) => {

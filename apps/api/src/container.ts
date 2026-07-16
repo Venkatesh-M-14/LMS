@@ -32,6 +32,10 @@ import { GradingService } from './modules/assessments/application/gradingService
 import { AssessmentAuthoringService } from './modules/assessments/application/assessmentAuthoringService';
 import { buildAssessmentsRouter } from './modules/assessments/http/assessmentsRouter';
 import { buildCmsAssessmentsRouter } from './modules/assessments/http/cmsAssessmentsRouter';
+import { EventBus } from './core/events/eventBus';
+import { PrismaProgressRepository } from './modules/progress/infrastructure/prismaProgressRepository';
+import { ProgressService } from './modules/progress/application/progressService';
+import { buildProgressRouter } from './modules/progress/http/progressRouter';
 import type { Router } from 'express';
 
 export interface Container {
@@ -47,6 +51,7 @@ export interface Container {
     cms: Router;
     cmsAssessments: Router;
     assessments: Router;
+    progress: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   shutdown(): Promise<void>;
@@ -99,6 +104,11 @@ export async function buildContainer(env: Env): Promise<Container> {
   const authoring = new LessonAuthoringService(new PrismaAuthoringRepository(prisma));
   const curriculum = new CurriculumQueryService(prisma);
 
+  const eventBus = new EventBus(logger);
+  const progressService = new ProgressService(new PrismaProgressRepository(prisma));
+  // Progress subscribes: a graded, passed quiz completes its lesson (cascade).
+  eventBus.on('AttemptGraded', (event) => progressService.onAttemptGraded(event));
+
   const assessmentRepo = new PrismaAssessmentRepository(prisma);
   const attemptRepo = new PrismaAttemptRepository(prisma);
   const gradingRepo = new PrismaGradingRepository(prisma);
@@ -106,12 +116,15 @@ export async function buildContainer(env: Env): Promise<Container> {
     assessments: assessmentRepo,
     attempts: attemptRepo,
     clock,
+    events: eventBus,
+    accessGate: progressService,
   });
   const gradingService = new GradingService({
     grading: gradingRepo,
     attempts: attemptRepo,
     assessments: assessmentRepo,
     clock,
+    events: eventBus,
   });
   const assessmentAuthoring = new AssessmentAuthoringService(assessmentRepo);
 
@@ -144,7 +157,7 @@ export async function buildContainer(env: Env): Promise<Container> {
       }),
       users: buildUsersRouter({ users, prisma, authenticate }),
       health: buildHealthRouter({ prisma, redis }),
-      curriculum: buildCurriculumRouter({ curriculum, authenticate }),
+      curriculum: buildCurriculumRouter({ curriculum, gate: progressService, authenticate }),
       cms: buildCmsRouter({ authoring, authenticate }),
       cmsAssessments: buildCmsAssessmentsRouter({
         authoring: assessmentAuthoring,
@@ -152,6 +165,7 @@ export async function buildContainer(env: Env): Promise<Container> {
         authenticate,
       }),
       assessments: buildAssessmentsRouter({ attempts: attemptService, authenticate }),
+      progress: buildProgressRouter({ progress: progressService, authenticate }),
     },
     globalRateLimiter,
     async shutdown() {

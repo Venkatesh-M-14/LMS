@@ -1,10 +1,18 @@
 import { Router, type RequestHandler } from 'express';
+import type { Role } from '@academy/shared';
 import { asyncHandler } from '../../../core/http/asyncHandler';
 import { ok } from '../../../core/http/respond';
 import type { CurriculumQueryService } from '../application/curriculumQueryService';
 
+/** Gating port implemented by the progress module (wired in the container). */
+export interface CurriculumGate {
+  assertLessonAccessible(actor: { id: string; role: Role }, lessonId: string): Promise<void>;
+  markLessonOpened(actor: { id: string; role: Role }, lessonId: string): Promise<void>;
+}
+
 export interface CurriculumRouterDeps {
   curriculum: CurriculumQueryService;
+  gate: CurriculumGate;
   authenticate: RequestHandler;
 }
 
@@ -23,7 +31,12 @@ export function buildCurriculumRouter(deps: CurriculumRouterDeps): Router {
     '/lessons/:lessonId',
     deps.authenticate,
     asyncHandler(async (req, res) => {
-      ok(res, await deps.curriculum.getLessonRead(req.params.lessonId as string));
+      const lessonId = req.params.lessonId as string;
+      // Gate BEFORE reading: students only see published content they unlocked.
+      await deps.gate.assertLessonAccessible(req.user!, lessonId);
+      const lesson = await deps.curriculum.getLessonRead(lessonId);
+      await deps.gate.markLessonOpened(req.user!, lessonId);
+      ok(res, lesson);
     }),
   );
 

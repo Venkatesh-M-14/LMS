@@ -10,13 +10,16 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import LinearProgress from '@mui/material/LinearProgress';
 import { useAppSelector } from '../../app/hooks';
 import { curriculumKeys, fetchPathTree } from '../curriculum/api';
+import { fetchProgressMap, progressKeys } from '../progress/api';
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const user = useAppSelector((state) => state.auth.user);
   const { data: path } = useQuery({ queryKey: curriculumKeys.pathTree, queryFn: fetchPathTree });
+  const { data: progress } = useQuery({ queryKey: progressKeys.map, queryFn: fetchProgressMap });
 
   const stats = path
     ? {
@@ -85,14 +88,40 @@ export function DashboardPage() {
                     </Typography>
                   </Box>
                 </Stack>
+                {progress && progress.totalLessons > 0 ? (
+                  <Box sx={{ maxWidth: 420 }}>
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.round(
+                            (progress.completedLessons / progress.totalLessons) * 100,
+                          )}
+                          aria-label={t('progress.pathProgress')}
+                          sx={{ height: 8, borderRadius: 4 }}
+                        />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('progress.lessonsDone', {
+                          done: progress.completedLessons,
+                          total: progress.totalLessons,
+                        })}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                ) : null}
                 <Box>
                   <Button
                     component={RouterLink}
-                    to="/curriculum"
+                    to={
+                      progress?.nextLessonId ? `/lessons/${progress.nextLessonId}` : '/curriculum'
+                    }
                     variant="contained"
                     endIcon={<ArrowForwardIcon />}
                   >
-                    {t('dashboard.startLearning')}
+                    {progress && progress.completedLessons > 0
+                      ? t('progress.continue')
+                      : t('dashboard.startLearning')}
                   </Button>
                 </Box>
               </Stack>

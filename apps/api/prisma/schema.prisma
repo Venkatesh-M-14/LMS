@@ -37,6 +37,8 @@ model User {
   reviewedVersions LessonVersion[]  @relation("ReviewedVersions")
   attempts         Attempt[]
   itemSubmissions  ItemSubmission[]
+  enrollments      Enrollment[]
+  progressRecords  ProgressRecord[]
 
   @@map("users")
 }
@@ -98,7 +100,8 @@ model Path {
   description String  @default("")
   isActive    Boolean @default(true)
 
-  modules Module[]
+  modules     Module[]
+  enrollments Enrollment[]
 
   @@map("paths")
 }
@@ -347,4 +350,65 @@ model ItemSubmission {
 
   @@unique([attemptId, itemId])
   @@map("item_submissions")
+}
+
+// ─── Progress & gating ───────────────────────────────────────────────────────
+// ProgressRecord is deliberately polymorphic (unitId is not a real FK): one
+// table for lesson/topic/module progress beats three near-identical ones.
+// Referential integrity for unitId is the application layer's job.
+
+enum ProgressUnitType {
+  LESSON
+  TOPIC
+  MODULE
+}
+
+enum ProgressStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Enrollment {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pathId     String
+  path       Path     @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime @default(now())
+
+  @@id([userId, pathId])
+  @@map("enrollments")
+}
+
+model ProgressRecord {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitType     ProgressUnitType
+  unitId       String
+  status       ProgressStatus
+  bestScorePct Float?
+  startedAt    DateTime         @default(now())
+  completedAt  DateTime?
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([userId, unitType, unitId])
+  @@index([userId, status])
+  @@map("progress_records")
+}
+
+/// Configurable gating: unit X requires unit Y (optionally at a minimum
+/// score). Defaults are generated from curriculum order at seed time;
+/// LOCKED/AVAILABLE are derived from these rules + completions at read time,
+/// so there is no unlock state to corrupt — only completions to record.
+model PrerequisiteRule {
+  id               String           @id @default(cuid())
+  unitType         ProgressUnitType
+  unitId           String
+  requiredUnitType ProgressUnitType
+  requiredUnitId   String
+  minScorePct      Int?
+
+  @@unique([unitType, unitId, requiredUnitType, requiredUnitId])
+  @@index([unitType, unitId])
+  @@map("prerequisite_rules")
 }

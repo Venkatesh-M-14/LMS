@@ -67,8 +67,13 @@ function QuizTaker({ attempt }: { attempt: AttemptInProgress }) {
       // Submit carries the full answer set — nothing depends on autosave timing.
       return submitAttempt(attempt.id, answers);
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.setQueryData(quizKeys.attempt(attempt.id), result);
+      // A pass may have completed the lesson and unlocked the next one.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['progress'] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz', 'summary'] }),
+      ]);
     },
   });
 

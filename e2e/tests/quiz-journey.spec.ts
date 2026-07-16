@@ -36,7 +36,7 @@ test('quiz: answer → submit → reflection graded by instructor → student se
   test.setTimeout(120_000);
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const studentName = `Quiz Taker ${stamp}`;
-  const reflectionText = `Reflection-${stamp}: binary floats cannot represent 0.1 exactly, so equality comparisons drift; store integer paise instead.`;
+  const reflectionText = `Reflection-${stamp}: a slow page means the main thread is executing too many instructions before paint; move heavy loops into a Web Worker.`;
 
   // Fresh student for an unambiguous grading queue.
   await page.goto('/register');
@@ -46,20 +46,20 @@ test('quiz: answer → submit → reflection graded by instructor → student se
   await page.getByRole('button', { name: /create account/i }).click();
   await expect(page.getByRole('heading', { name: /welcome,/i })).toBeVisible();
 
-  // Take the "Bits, Bytes, and Binary" quiz.
-  await openLesson(page, 'Bits, Bytes, and Binary');
+  // Take the first lesson's quiz (later lessons are gated in M4).
+  await openLesson(page, 'How a Computer Actually Works');
   const quizCard = page.getByTestId('quiz-card');
   await expect(quizCard).toBeVisible();
   await quizCard.getByRole('button', { name: /start quiz/i }).click();
 
-  // Q1 MCQ: 256, because 2⁸…
-  await page.getByLabel(/256, because/i).check();
-  // Q2 output prediction: parseInt('1100', 2) → 12
-  await page.getByLabel(/your predicted output/i).fill('12');
-  // Q3 multi-select: a, c, d
-  await page.getByLabel(/same bytes can be text/i).check();
-  await page.getByLabel(/#FF0000 encodes/i).check();
-  await page.getByLabel(/floats have limited precision/i).check();
+  // Q1 MCQ: fetch reads the next instruction from memory
+  await page.getByLabel(/reads the next instruction/i).check();
+  // Q2 multi-select: a, b, d
+  await page.getByLabel(/instructions and data live in the same memory/i).check();
+  await page.getByLabel(/code can be treated as data/i).check();
+  await page.getByLabel(/running untrusted code is dangerous/i).check();
+  // Q3 output prediction: 4 + 6 + 6 = 16
+  await page.getByLabel(/your predicted output/i).fill('16');
   // Q4 reflection
   await page.getByLabel(/your answer/i).fill(reflectionText);
 
@@ -95,7 +95,7 @@ test('quiz: answer → submit → reflection graded by instructor → student se
   // Student sees the final, passed result with feedback.
   await logout(page);
   await login(page, `quiz-${stamp}@example.com`);
-  await openLesson(page, 'Bits, Bytes, and Binary');
+  await openLesson(page, 'How a Computer Actually Works');
   await page
     .getByTestId('quiz-card')
     .getByRole('button', { name: /view last result/i })
@@ -115,14 +115,14 @@ test('quiz: wrong answers fail immediately when no reflection is written', async
   await page.getByRole('button', { name: /create account/i }).click();
   await expect(page.getByRole('heading', { name: /welcome,/i })).toBeVisible();
 
-  await openLesson(page, 'Bits, Bytes, and Binary');
+  await openLesson(page, 'How a Computer Actually Works');
   await page
     .getByTestId('quiz-card')
     .getByRole('button', { name: /start quiz/i })
     .click();
 
   // One wrong MCQ answer, everything else untouched (reflection left empty).
-  await page.getByLabel(/8, because a byte has 8 bits/i).check();
+  await page.getByLabel(/waits for user input/i).check();
   await page.getByRole('button', { name: /submit answers/i }).click();
   await page
     .getByRole('dialog')
@@ -134,5 +134,5 @@ test('quiz: wrong answers fail immediately when no reflection is written', async
   await expect(page.getByTestId('attempt-results')).toBeVisible();
 
   // The correct answers are now revealed for learning.
-  await expect(page.getByText(/256, because/i)).toBeVisible();
+  await expect(page.getByText(/reads the next instruction/i).first()).toBeVisible();
 });
