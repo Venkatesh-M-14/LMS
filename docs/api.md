@@ -1,4 +1,4 @@
-# API Reference — Milestones 1–2
+# API Reference — Milestones 1–3
 
 Base URL: `/api/v1` · All bodies are JSON (camelCase).
 
@@ -65,21 +65,46 @@ Errors: `NOT_FOUND` 404 · `LESSON_NOT_PUBLISHED` 404
 
 ## CMS _(Bearer token, INSTRUCTOR or ADMIN)_
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /cms/lessons` | All lessons with topic/module, skills, published version, latest version |
-| `POST /cms/lessons` | Create lesson (+ empty v1 draft). Body: `{ topicId, slug, title, estimatedMinutes }` |
-| `PUT /cms/lessons/:id/skills` | Replace skill tags. Body: `{ skillIds[] }` |
-| `GET /cms/skills` | All skills |
-| `GET /cms/lessons/:id/versions` | Version history (newest first) |
-| `POST /cms/lessons/:id/versions` | New draft (blocks copied from published). Body: `{ changelog? }` |
-| `GET /cms/lesson-versions/:id` | Version detail incl. blocks |
-| `PUT /cms/lesson-versions/:id/blocks` | Replace a draft's blocks atomically. Body: `{ blocks: [{type, payload}] }` |
-| `POST /cms/lesson-versions/:id/submit` | DRAFT → IN_REVIEW |
-| `POST /cms/lesson-versions/:id/publish` | IN_REVIEW → PUBLISHED (archives previous, repoints lesson) |
-| `POST /cms/lesson-versions/:id/reject` | IN_REVIEW → DRAFT. Body: `{ reviewNotes }` |
+| Endpoint                                | Purpose                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------ |
+| `GET /cms/lessons`                      | All lessons with topic/module, skills, published version, latest version             |
+| `POST /cms/lessons`                     | Create lesson (+ empty v1 draft). Body: `{ topicId, slug, title, estimatedMinutes }` |
+| `PUT /cms/lessons/:id/skills`           | Replace skill tags. Body: `{ skillIds[] }`                                           |
+| `GET /cms/skills`                       | All skills                                                                           |
+| `GET /cms/lessons/:id/versions`         | Version history (newest first)                                                       |
+| `POST /cms/lessons/:id/versions`        | New draft (blocks copied from published). Body: `{ changelog? }`                     |
+| `GET /cms/lesson-versions/:id`          | Version detail incl. blocks                                                          |
+| `PUT /cms/lesson-versions/:id/blocks`   | Replace a draft's blocks atomically. Body: `{ blocks: [{type, payload}] }`           |
+| `POST /cms/lesson-versions/:id/submit`  | DRAFT → IN_REVIEW                                                                    |
+| `POST /cms/lesson-versions/:id/publish` | IN_REVIEW → PUBLISHED (archives previous, repoints lesson)                           |
+| `POST /cms/lesson-versions/:id/reject`  | IN_REVIEW → DRAFT. Body: `{ reviewNotes }`                                           |
 
 Workflow error codes: `VERSION_NOT_EDITABLE` 409 · `INVALID_STATUS_TRANSITION` 409 · `OPEN_DRAFT_EXISTS` 409 · `REVIEWER_CANNOT_BE_AUTHOR` 403 · `SKILLS_REQUIRED_TO_PUBLISH` 422 · `EMPTY_VERSION_CANNOT_ADVANCE` 422 · `CONFLICT` 409 (concurrent transition lost the race)
+
+## Assessments _(Bearer token)_
+
+| Endpoint                                     | Purpose                                                                                                    |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /assessments/lessons/:lessonId/summary` | Quiz card data: settings, item count, caller's attempts, canStart/blockedReason (null if no takeable quiz) |
+| `POST /assessments/:id/attempts` → 201       | Start (or resume) an attempt; response items are **sanitized** (no answer keys)                            |
+| `GET /assessments/attempts/:id`              | In-progress: sanitized items + saved answers. Graded: full results with keys/explanations revealed         |
+| `PUT /assessments/attempts/:id/answers`      | Autosave `{ answers: { [itemId]: answer } }` (validated per item type)                                     |
+| `POST /assessments/attempts/:id/submit`      | Flushes final answers, auto-grades; reflections → status `GRADING`, else `GRADED` with `scorePct/passed`   |
+
+Errors: `ATTEMPT_LIMIT_REACHED` 409 · `COOLDOWN_ACTIVE` 429 · `ATTEMPT_NOT_IN_PROGRESS` 409 · `NO_ITEMS_TO_ATTEMPT` 409 · `ANSWER_INVALID` 400 · `FORBIDDEN` 403 (not your attempt)
+
+## CMS — quizzes & grading _(INSTRUCTOR or ADMIN)_
+
+| Endpoint                                | Purpose                                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /cms/lessons/:lessonId/assessment` | Authoring view (full payloads incl. answer keys) or null                                                   |
+| `PUT /cms/lessons/:lessonId/assessment` | Upsert settings `{ title, passingScorePct, maxAttempts, cooldownMinutes, shuffleItems }`                   |
+| `PUT /cms/assessments/:id/items`        | Replace items `{ items: [{ points, skillIds, item: {type, payload} }] }` — never affects existing attempts |
+| `GET /cms/grading`                      | Attempts awaiting manual grading (oldest first)                                                            |
+| `GET /cms/grading/:attemptId`           | Reflection submissions with student answers                                                                |
+| `POST /cms/grading/submissions/:id`     | `{ score ≤ item points, feedback }`; grading the last reflection finalizes the attempt                     |
+
+Errors: `SUBMISSION_NOT_PENDING` 409 · `SCORE_EXCEEDS_POINTS` 422
 
 ## Operational
 

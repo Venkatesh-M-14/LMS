@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiClientError } from '../../shared/api/client';
 import { curriculumKeys, fetchLessonRead } from './api';
 import { BlockRenderer } from './components/BlockRenderer';
+import { QuizCard } from '../quiz/components/QuizCard';
 
 export function LessonPage() {
   const { t } = useTranslation();
@@ -73,6 +74,8 @@ export function LessonPage() {
       <Divider sx={{ mb: 4 }} />
 
       <BlockRenderer blocks={lesson.blocks} />
+
+      <QuizCard lessonId={lesson.lessonId} />
     </Box>
   );
 }

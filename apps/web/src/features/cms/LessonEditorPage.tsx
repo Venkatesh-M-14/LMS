@@ -474,6 +474,13 @@ export function LessonEditorPage() {
           </Paper>
 
           <Divider />
+          <Button
+            component={RouterLink}
+            to={`/instructor/lessons/${lessonId}/assessment`}
+            size="small"
+          >
+            {t('cms.editQuiz')}
+          </Button>
           <Button component={RouterLink} to={`/lessons/${lessonId}`} size="small">
             {t('cms.viewAsStudent')}
           </Button>

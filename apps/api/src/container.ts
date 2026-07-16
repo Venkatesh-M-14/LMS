@@ -22,6 +22,16 @@ import { LessonAuthoringService } from './modules/cms/application/lessonAuthorin
 import { buildCmsRouter } from './modules/cms/http/cmsRouter';
 import { CurriculumQueryService } from './modules/curriculum/application/curriculumQueryService';
 import { buildCurriculumRouter } from './modules/curriculum/http/curriculumRouter';
+import {
+  PrismaAssessmentRepository,
+  PrismaAttemptRepository,
+  PrismaGradingRepository,
+} from './modules/assessments/infrastructure/prismaAssessmentRepositories';
+import { AttemptService } from './modules/assessments/application/attemptService';
+import { GradingService } from './modules/assessments/application/gradingService';
+import { AssessmentAuthoringService } from './modules/assessments/application/assessmentAuthoringService';
+import { buildAssessmentsRouter } from './modules/assessments/http/assessmentsRouter';
+import { buildCmsAssessmentsRouter } from './modules/assessments/http/cmsAssessmentsRouter';
 import type { Router } from 'express';
 
 export interface Container {
@@ -35,6 +45,8 @@ export interface Container {
     health: Router;
     curriculum: Router;
     cms: Router;
+    cmsAssessments: Router;
+    assessments: Router;
   };
   globalRateLimiter: ReturnType<typeof createRateLimiter>;
   shutdown(): Promise<void>;
@@ -87,17 +99,33 @@ export async function buildContainer(env: Env): Promise<Container> {
   const authoring = new LessonAuthoringService(new PrismaAuthoringRepository(prisma));
   const curriculum = new CurriculumQueryService(prisma);
 
+  const assessmentRepo = new PrismaAssessmentRepository(prisma);
+  const attemptRepo = new PrismaAttemptRepository(prisma);
+  const gradingRepo = new PrismaGradingRepository(prisma);
+  const attemptService = new AttemptService({
+    assessments: assessmentRepo,
+    attempts: attemptRepo,
+    clock,
+  });
+  const gradingService = new GradingService({
+    grading: gradingRepo,
+    attempts: attemptRepo,
+    assessments: assessmentRepo,
+    clock,
+  });
+  const assessmentAuthoring = new AssessmentAuthoringService(assessmentRepo);
+
   const globalRateLimiter = createRateLimiter({
     redis,
     prefix: 'global',
     windowMs: 60_000,
-    limit: 300,
+    limit: env.RATE_LIMIT_GLOBAL_PER_MIN,
   });
   const authRateLimiter = createRateLimiter({
     redis,
     prefix: 'auth',
     windowMs: 15 * 60_000,
-    limit: 30,
+    limit: env.RATE_LIMIT_AUTH_PER_WINDOW,
   });
 
   return {
@@ -118,6 +146,12 @@ export async function buildContainer(env: Env): Promise<Container> {
       health: buildHealthRouter({ prisma, redis }),
       curriculum: buildCurriculumRouter({ curriculum, authenticate }),
       cms: buildCmsRouter({ authoring, authenticate }),
+      cmsAssessments: buildCmsAssessmentsRouter({
+        authoring: assessmentAuthoring,
+        grading: gradingService,
+        authenticate,
+      }),
+      assessments: buildAssessmentsRouter({ attempts: attemptService, authenticate }),
     },
     globalRateLimiter,
     async shutdown() {

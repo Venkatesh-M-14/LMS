@@ -33,8 +33,10 @@ model User {
   updatedAt       DateTime   @updatedAt
 
   refreshTokens    RefreshToken[]
-  authoredVersions LessonVersion[] @relation("AuthoredVersions")
-  reviewedVersions LessonVersion[] @relation("ReviewedVersions")
+  authoredVersions LessonVersion[]  @relation("AuthoredVersions")
+  reviewedVersions LessonVersion[]  @relation("ReviewedVersions")
+  attempts         Attempt[]
+  itemSubmissions  ItemSubmission[]
 
   @@map("users")
 }
@@ -149,10 +151,11 @@ model Lesson {
   currentPublishedVersionId String?        @unique
   currentPublishedVersion   LessonVersion? @relation("CurrentPublished", fields: [currentPublishedVersionId], references: [id])
 
-  versions  LessonVersion[]
-  skills    LessonSkill[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  versions   LessonVersion[]
+  skills     LessonSkill[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  assessment Assessment?
 
   @@unique([topicId, slug])
   @@unique([topicId, order])
@@ -210,7 +213,8 @@ model Skill {
   topicId String?
   topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
 
-  lessons LessonSkill[]
+  lessons              LessonSkill[]
+  assessmentItemSkills AssessmentItemSkill[]
 
   @@map("skills")
 }
@@ -223,4 +227,124 @@ model LessonSkill {
 
   @@id([lessonId, skillId])
   @@map("lesson_skills")
+}
+
+// ─── Assessments ─────────────────────────────────────────────────────────────
+// Assessments attach to stable identity rows (a Lesson for quizzes). Items are
+// a type enum + validated JSON payload. Attempts freeze the full item payloads
+// at start (itemsSnapshot), so editing items never changes how an in-flight or
+// historical attempt is graded.
+
+enum AssessmentKind {
+  LESSON_QUIZ
+  TOPIC_ASSESSMENT
+  MODULE_EXAM
+}
+
+enum AssessmentItemType {
+  MCQ
+  MULTI_SELECT
+  OUTPUT_PREDICTION
+  REFLECTION
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  GRADING
+  GRADED
+}
+
+model Assessment {
+  id              String         @id @default(cuid())
+  kind            AssessmentKind @default(LESSON_QUIZ)
+  lessonId        String?        @unique
+  lesson          Lesson?        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title           String
+  passingScorePct Int            @default(70)
+  /// null = unlimited
+  maxAttempts     Int?
+  cooldownMinutes Int            @default(0)
+  shuffleItems    Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  items    AssessmentItem[]
+  attempts Attempt[]
+
+  @@map("assessments")
+}
+
+model AssessmentItem {
+  id                   String             @id @default(cuid())
+  assessmentId         String
+  assessment           Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  order                Int
+  type                 AssessmentItemType
+  points               Int                @default(1)
+  payload              Json
+  payloadSchemaVersion Int                @default(1)
+
+  skills AssessmentItemSkill[]
+
+  @@unique([assessmentId, order])
+  @@map("assessment_items")
+}
+
+model AssessmentItemSkill {
+  itemId  String
+  item    AssessmentItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  skillId String
+  skill   Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, skillId])
+  @@map("assessment_item_skills")
+}
+
+model Attempt {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessmentId    String
+  assessment      Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  attemptNumber   Int
+  status          AttemptStatus @default(IN_PROGRESS)
+  passed          Boolean?
+  scorePct        Float?
+  rawScore        Float?
+  maxScore        Float?
+  /// Full item payloads (including answer keys) frozen at attempt start.
+  /// NEVER serialized to the client unsanitized.
+  itemsSnapshot   Json
+  /// Published lesson version the learner was reading when the quiz started.
+  lessonVersionId String?
+  startedAt       DateTime      @default(now())
+  submittedAt     DateTime?
+  gradedAt        DateTime?
+
+  submissions ItemSubmission[]
+
+  @@unique([userId, assessmentId, attemptNumber])
+  @@index([assessmentId, status])
+  @@index([userId, assessmentId])
+  @@map("attempts")
+}
+
+model ItemSubmission {
+  id             String    @id @default(cuid())
+  attemptId      String
+  attempt        Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  /// References the itemId inside the attempt's snapshot (not a live FK —
+  /// the live item may be edited or deleted after the snapshot was taken).
+  itemId         String
+  answer         Json
+  autoScore      Float?
+  manualScore    Float?
+  graderId       String?
+  grader         User?     @relation(fields: [graderId], references: [id])
+  graderFeedback String    @default("")
+  gradedAt       DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([attemptId, itemId])
+  @@map("item_submissions")
 }

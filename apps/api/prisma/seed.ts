@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 import { MODULES_SEED, PATH_SEED } from './seedData/curriculum';
 import { LESSONS_SEED } from './seedData/lessons';
+import { QUIZZES_SEED } from './seedData/quizzes';
 
 /**
  * Development/demo seed. Idempotent: structure rows are upserted by slug;
@@ -188,6 +189,61 @@ async function seedLessons(
   );
 }
 
+async function seedQuizzes(prisma: PrismaClient) {
+  let created = 0;
+  let skipped = 0;
+
+  for (const quiz of QUIZZES_SEED) {
+    const lesson = await prisma.lesson.findFirst({ where: { slug: quiz.lessonSlug } });
+    if (!lesson) throw new Error(`Seed bug: no lesson with slug ${quiz.lessonSlug}`);
+
+    // Never clobber CMS-authored quizzes: skip lessons that already have one.
+    const existing = await prisma.assessment.findUnique({ where: { lessonId: lesson.id } });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const assessment = await tx.assessment.create({
+        data: {
+          lessonId: lesson.id,
+          kind: 'LESSON_QUIZ',
+          title: quiz.title,
+          passingScorePct: quiz.passingScorePct,
+          maxAttempts: null,
+          cooldownMinutes: 0,
+          shuffleItems: false,
+        },
+      });
+      for (const [index, seedItem] of quiz.items.entries()) {
+        const item = await tx.assessmentItem.create({
+          data: {
+            assessmentId: assessment.id,
+            order: index + 1,
+            type: seedItem.item.type,
+            points: seedItem.points,
+            payload: seedItem.item.payload,
+          },
+        });
+        const skills = await tx.skill.findMany({
+          where: { slug: { in: seedItem.skillSlugs } },
+          select: { id: true },
+        });
+        if (skills.length > 0) {
+          await tx.assessmentItemSkill.createMany({
+            data: skills.map((skill) => ({ itemId: item.id, skillId: skill.id })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+    created++;
+  }
+
+  console.warn(`Seeded quizzes: ${created} created, ${skipped} left untouched`);
+}
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed a production database');
@@ -198,6 +254,7 @@ async function main(): Promise<void> {
     const { admin, instructor } = await seedUsers(prisma);
     const topicIdBySlug = await seedCurriculum(prisma);
     await seedLessons(prisma, topicIdBySlug, instructor.id, admin.id);
+    await seedQuizzes(prisma);
   } finally {
     await prisma.$disconnect();
   }

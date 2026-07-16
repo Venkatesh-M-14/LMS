@@ -20,6 +20,10 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   REFRESH_ROTATION_GRACE_SEC: z.coerce.number().int().nonnegative().default(30),
+  /** Auth endpoints: requests per 15-minute window per IP. */
+  RATE_LIMIT_AUTH_PER_WINDOW: z.coerce.number().int().positive().default(30),
+  /** All other API endpoints: requests per minute per IP. */
+  RATE_LIMIT_GLOBAL_PER_MIN: z.coerce.number().int().positive().default(300),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

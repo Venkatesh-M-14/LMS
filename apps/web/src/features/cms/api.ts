@@ -1,10 +1,16 @@
 import type {
+  AssessmentAuthoringView,
   CmsLessonOverview,
   ContentBlockInput,
   CreateLessonRequest,
+  GradeSubmissionRequest,
+  GradingAttemptDetail,
+  GradingQueueEntry,
   LessonVersionDetail,
   LessonVersionSummary,
+  ReplaceItemsRequest,
   SkillDto,
+  UpsertAssessmentRequest,
 } from '@academy/shared';
 import { apiRequest } from '../../shared/api/client';
 
@@ -13,6 +19,9 @@ export const cmsKeys = {
   skills: ['cms', 'skills'] as const,
   versions: (lessonId: string) => ['cms', 'versions', lessonId] as const,
   version: (versionId: string) => ['cms', 'version', versionId] as const,
+  assessment: (lessonId: string) => ['cms', 'assessment', lessonId] as const,
+  gradingQueue: ['cms', 'grading'] as const,
+  gradingDetail: (attemptId: string) => ['cms', 'grading', attemptId] as const,
 };
 
 export function fetchCmsLessons(): Promise<CmsLessonOverview[]> {
@@ -68,5 +77,43 @@ export function rejectVersion(
   return apiRequest(`/cms/lesson-versions/${versionId}/reject`, {
     method: 'POST',
     body: { reviewNotes },
+  });
+}
+
+// ── Assessments & grading ───────────────────────────────────────────────────
+
+export function fetchLessonAssessment(lessonId: string): Promise<AssessmentAuthoringView | null> {
+  return apiRequest(`/cms/lessons/${lessonId}/assessment`);
+}
+
+export function upsertLessonAssessment(
+  lessonId: string,
+  settings: UpsertAssessmentRequest,
+): Promise<AssessmentAuthoringView> {
+  return apiRequest(`/cms/lessons/${lessonId}/assessment`, { method: 'PUT', body: settings });
+}
+
+export function replaceAssessmentItems(
+  assessmentId: string,
+  request: ReplaceItemsRequest,
+): Promise<void> {
+  return apiRequest(`/cms/assessments/${assessmentId}/items`, { method: 'PUT', body: request });
+}
+
+export function fetchGradingQueue(): Promise<GradingQueueEntry[]> {
+  return apiRequest('/cms/grading');
+}
+
+export function fetchGradingDetail(attemptId: string): Promise<GradingAttemptDetail> {
+  return apiRequest(`/cms/grading/${attemptId}`);
+}
+
+export function gradeSubmission(
+  submissionId: string,
+  request: GradeSubmissionRequest,
+): Promise<void> {
+  return apiRequest(`/cms/grading/submissions/${submissionId}`, {
+    method: 'POST',
+    body: request,
   });
 }

@@ -45,6 +45,8 @@ export function createApp(container: Container): Express {
   app.use('/api/v1/users', routers.users);
   app.use('/api/v1/curriculum', routers.curriculum);
   app.use('/api/v1/cms', routers.cms);
+  app.use('/api/v1/cms', routers.cmsAssessments);
+  app.use('/api/v1/assessments', routers.assessments);
 
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));

@@ -95,9 +95,19 @@ export function AppLayout() {
               {t('nav.curriculum')}
             </Button>
             {user && (user.role === 'INSTRUCTOR' || user.role === 'ADMIN') ? (
-              <Button component={RouterLink} to="/instructor" color="inherit" size="small">
-                {t('nav.instructor')}
-              </Button>
+              <>
+                <Button component={RouterLink} to="/instructor" color="inherit" size="small">
+                  {t('nav.instructor')}
+                </Button>
+                <Button
+                  component={RouterLink}
+                  to="/instructor/grading"
+                  color="inherit"
+                  size="small"
+                >
+                  {t('nav.grading')}
+                </Button>
+              </>
             ) : null}
           </Box>
 
