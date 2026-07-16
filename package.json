@@ -1,0 +1,38 @@
+{
+  "name": "frontend-engineering-academy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend Engineering Academy — an interactive learning platform taking students from zero to industry-ready frontend engineers.",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "playwright test",
+    "db:migrate": "pnpm --filter @academy/api db:migrate",
+    "db:migrate:deploy": "pnpm --filter @academy/api db:migrate:deploy",
+    "db:generate": "pnpm --filter @academy/api db:generate",
+    "db:seed": "pnpm --filter @academy/api db:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "prettier": "^3.6.0",
+    "turbo": "^2.5.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "esbuild",
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines"
+    ]
+  }
+}

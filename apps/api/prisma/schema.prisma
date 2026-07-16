@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  displayName     String
+  role            Role       @default(STUDENT)
+  status          UserStatus @default(ACTIVE)
+  avatarUrl       String?
+  locale          String     @default("en")
+  timezone        String     @default("UTC")
+  emailVerifiedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+/// Opaque refresh tokens, stored as SHA-256 hashes. Tokens form rotation
+/// "families": every login starts a family; each refresh creates a child row
+/// and stamps the parent with replacedByTokenId. Presenting an already-replaced
+/// token outside the grace window means the token leaked — the whole family is
+/// revoked.
+model RefreshToken {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique
+  familyId          String
+  replacedByTokenId String?
+  rotatedAt         DateTime?
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  ip                String?
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
