@@ -13,7 +13,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "reset:community": "node scripts/reset-community-data.mjs",
+    "set:password": "node scripts/set-password.mjs"
   },
   "dependencies": {
     "@academy/shared": "workspace:*",

@@ -5,6 +5,67 @@ stateless Express API, a static web bundle, PostgreSQL, and Redis; BullMQ
 workers (judge, email) run in-process with the API today and can be split out
 later without code changes.
 
+## Vercel (frontend) — and why the backend needs its own host
+
+**Vercel hosts the web app only.** The API cannot run on Vercel: Vercel runs
+short-lived serverless functions, while this API is a long-lived server that
+holds **Socket.IO connections** (chat, notifications, judge results), runs
+**BullMQ workers** (email drain, code judge), **spawns sandbox subprocesses**
+to execute learner code, and needs persistent **PostgreSQL + Redis**. Host the
+API on a always-on-process platform — **Railway**, **Render**, or **Fly.io**
+are the easy options (all three also offer managed Postgres; use their Redis
+or Upstash) — or any VPS with Docker.
+
+### One-time setup
+
+1. **Deploy the API first** (e.g. Railway): create a service from this repo
+   with root `apps/api`, add Postgres + Redis, set the env vars from the table
+   below (`pnpm db:migrate:deploy && pnpm db:seed` on first boot — set
+   `SEED_PASSWORD` so the seeded admin/instructor don't get the dev default).
+   Note the public URL, e.g. `https://academy-api.up.railway.app`.
+2. **Point the web at it**: in [apps/web/vercel.json](../apps/web/vercel.json),
+   replace both `YOUR-API-DOMAIN` placeholders with that API host.
+3. **Import the repo in Vercel** (vercel.com → Add New → Project):
+   - **Root Directory:** `apps/web` (enable “Include files outside root”)
+   - Install/build/output are read from `vercel.json` (pnpm + turbo; builds
+     `@academy/shared` first, outputs `dist/`). No env vars are needed on the
+     web side.
+4. **Set the API's `WEB_ORIGIN`** to your Vercel URL (e.g.
+   `https://academy.vercel.app`).
+
+### How it fits together
+
+The web app calls `/api/v1/...` and `/socket.io` on its **own origin**;
+`vercel.json` rewrites proxy those to the API. That keeps everything
+same-origin, so the auth cookies and CSRF double-submit work unchanged, and no
+CORS is involved. (WebSocket upgrades don't pass through Vercel rewrites —
+Socket.IO detects this and falls back to HTTP long-polling automatically,
+which is fine at small-circle scale.) All other routes rewrite to
+`index.html` for the SPA, with static assets served first.
+
+### CI/CD
+
+- **Frontend:** Vercel's Git integration deploys every push to `main` and
+  gives each PR a preview URL — that *is* the CD. The existing GitHub Actions
+  workflow stays as the test gate (lint, typecheck, unit, E2E) on every push.
+- **Backend:** Railway/Render/Fly all auto-deploy from GitHub the same way —
+  point the service at `main`, and apply migrations on deploy
+  (`pnpm db:migrate:deploy` as the release/pre-deploy command).
+
+## Launch checklist (fresh community)
+
+- `pnpm --filter @academy/api reset:community` wipes all users (except
+  `KEEP_EMAILS`, default admin + instructor), chats, notifications, analytics,
+  attempts, XP and E2E-authored junk lessons — the curriculum, quizzes,
+  challenges and rules stay. Run it against prod once before inviting people.
+- `pnpm --filter @academy/api set:password <email> '<new password>'` changes
+  any account's password and logs it out everywhere — set a strong admin
+  password before going live (or seed with `SEED_PASSWORD` set).
+- Seeded logins (password `Academy-dev1` unless `SEED_PASSWORD` was set):
+  `admin@academy.local` (ADMIN), `instructor@academy.local` (INSTRUCTOR).
+  The `student@academy.local` demo account is not kept by the reset; your
+  members register their own accounts.
+
 ## Topology
 
 ```
