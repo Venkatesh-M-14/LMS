@@ -11,9 +11,12 @@ export function createApp(container: Container): Express {
   const { env, logger, routers } = container;
   const app = express();
 
-  // Express sits behind a reverse proxy in production; trust one hop so
-  // req.ip and secure-cookie detection work.
-  app.set('trust proxy', 1);
+  // Express sits behind reverse proxies in production; the hop count decides
+  // which X-Forwarded-For entry becomes req.ip (and rate-limit bucketing).
+  // 1 = a single proxy (Caddy/nginx). 2 = Vercel-rewrite proxy + Caddy — with
+  // too few hops every user shares the proxy's IP and rate limits lock the
+  // whole community out together.
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
 
   app.use(requestId);

@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+apps/web
+e2e
+test-results
+playwright-report
+.git
+.github
+*.log
+.env*
+**/.env*
+!.env.production.example

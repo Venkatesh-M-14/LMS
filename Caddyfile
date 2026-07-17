@@ -1,0 +1,8 @@
+# Caddy terminates HTTPS (automatic Let's Encrypt certificates) and proxies
+# everything to the API container. SITE_DOMAIN comes from docker-compose.
+{$SITE_DOMAIN} {
+	encode gzip
+
+	# Socket.IO (websocket + polling) and the REST API both live on the API.
+	reverse_proxy api:4000
+}

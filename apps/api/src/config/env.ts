@@ -20,6 +20,10 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   REFRESH_ROTATION_GRACE_SEC: z.coerce.number().int().nonnegative().default(30),
+  /** Reverse-proxy hops in front of Express: 1 = Caddy/nginx only,
+   * 2 = Vercel rewrite proxy + Caddy. Decides which X-Forwarded-For entry
+   * becomes req.ip for per-IP rate limiting. */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   /** Auth endpoints: requests per 15-minute window per IP. */
   RATE_LIMIT_AUTH_PER_WINDOW: z.coerce.number().int().positive().default(30),
   /** All other API endpoints: requests per minute per IP. */

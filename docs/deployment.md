@@ -1,5 +1,9 @@
 # Deployment
 
+> **Deploying for $0?** Follow the dedicated step-by-step guide:
+> [deploy-tier0.md](./deploy-tier0.md) — Vercel + Oracle free VM + Neon,
+> using the production Dockerfile and compose file in this repo.
+
 A production checklist for the Frontend Engineering Academy. The stack is a
 stateless Express API, a static web bundle, PostgreSQL, and Redis; BullMQ
 workers (judge, email) run in-process with the API today and can be split out

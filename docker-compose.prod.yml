@@ -1,0 +1,55 @@
+# Production stack for a single VM (Tier 0: Oracle Cloud Always Free, or any
+# small server). Postgres is NOT here — use a managed free tier (Neon) via
+# DATABASE_URL so your data outlives the VM.
+#
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec api pnpm db:seed   # first boot only
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # e.g. academy-yourname.duckdns.org — Caddy fetches HTTPS certs itself.
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      REDIS_URL: redis://redis:6379
+    expose:
+      - '4000'
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-prod-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  caddy-data:
+  caddy-config:
+  redis-prod-data:
