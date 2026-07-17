@@ -183,7 +183,9 @@ async function seedLessons(
         where: { id: lesson.id },
         data: { currentPublishedVersionId: version.id },
       });
-    });
+      // Generous timeouts: seeding over a remote DB (e.g. Neon) pays a network
+      // round-trip per statement, easily exceeding Prisma's 5s default.
+    }, { timeout: 120_000, maxWait: 30_000 });
     created++;
     void index;
   }
@@ -246,7 +248,7 @@ async function seedQuizzes(prisma: PrismaClient) {
           });
         }
       }
-    });
+    }, { timeout: 120_000, maxWait: 30_000 });
     created++;
   }
 
