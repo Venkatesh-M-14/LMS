@@ -10,6 +10,10 @@
       "destination": "https://frontend-academy.duckdns.org/api/:path*"
     },
     {
+      "source": "/socket.io/",
+      "destination": "https://frontend-academy.duckdns.org/socket.io/"
+    },
+    {
       "source": "/socket.io/:path*",
       "destination": "https://frontend-academy.duckdns.org/socket.io/:path*"
     },
