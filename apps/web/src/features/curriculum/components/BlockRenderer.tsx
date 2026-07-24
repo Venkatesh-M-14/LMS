@@ -52,7 +52,13 @@ function MarkdownBody({ markdown }: { markdown: string }) {
           overflowX: 'auto',
         },
         '& pre code': { bgcolor: 'transparent', p: 0 },
-        '& table': { borderCollapse: 'collapse', my: 2 },
+        '& table': {
+          borderCollapse: 'collapse',
+          my: 2,
+          display: 'block',
+          overflowX: 'auto',
+          maxWidth: '100%',
+        },
         '& th, & td': { border: 1, borderColor: 'divider', px: 1.5, py: 0.75, textAlign: 'left' },
         '& blockquote': {
           borderLeft: 3,

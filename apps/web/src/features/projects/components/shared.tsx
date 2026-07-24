@@ -49,41 +49,45 @@ export function BriefBody({ brief }: { brief: ProjectBriefView }) {
             px: 0.5,
             borderRadius: 0.5,
           },
+          '& pre': { bgcolor: 'action.hover', p: 2, borderRadius: 1, overflowX: 'auto' },
+          '& table': { display: 'block', overflowX: 'auto', maxWidth: '100%' },
         }}
       >
         <Markdown remarkPlugins={[remarkGfm]}>{brief.briefMd}</Markdown>
       </Box>
 
       <Typography variant="subtitle2">{t('projects.rubric')}</Typography>
-      <Table size="small" aria-label={t('projects.rubric')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('projects.criterion')}</TableCell>
-            <TableCell align="right">{t('projects.maxPoints')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {brief.rubric.map((criterion) => (
-            <TableRow key={criterion.id}>
-              <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {criterion.title}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {criterion.description}
-                </Typography>
-              </TableCell>
-              <TableCell align="right">{criterion.maxPoints}</TableCell>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Table size="small" aria-label={t('projects.rubric')}>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('projects.criterion')}</TableCell>
+              <TableCell align="right">{t('projects.maxPoints')}</TableCell>
             </TableRow>
-          ))}
-          <TableRow>
-            <TableCell sx={{ fontWeight: 700 }}>{t('projects.total')}</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 700 }}>
-              {brief.totalPoints}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {brief.rubric.map((criterion) => (
+              <TableRow key={criterion.id}>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {criterion.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {criterion.description}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">{criterion.maxPoints}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700 }}>{t('projects.total')}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700 }}>
+                {brief.totalPoints}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </Box>
     </Stack>
   );
 }
@@ -100,34 +104,36 @@ export function ScoresTable({
   const { t } = useTranslation();
   const byCriterion = new Map(scores.map((score) => [score.criterionId, score]));
   return (
-    <Table size="small" aria-label={t('projects.scores')}>
-      <TableBody>
-        {brief.rubric.map((criterion) => {
-          const score = byCriterion.get(criterion.id);
-          return (
-            <TableRow key={criterion.id}>
-              <TableCell>
-                <Typography variant="body2">{criterion.title}</Typography>
-                {score?.comment ? (
-                  <Typography variant="caption" color="text.secondary">
-                    {score.comment}
-                  </Typography>
-                ) : null}
-              </TableCell>
-              <TableCell align="right">
-                {score?.points ?? '—'}/{criterion.maxPoints}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-        <TableRow>
-          <TableCell sx={{ fontWeight: 700 }}>{t('projects.total')}</TableCell>
-          <TableCell align="right" sx={{ fontWeight: 700 }}>
-            {earned ?? '—'}/{brief.totalPoints}
-          </TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small" aria-label={t('projects.scores')}>
+        <TableBody>
+          {brief.rubric.map((criterion) => {
+            const score = byCriterion.get(criterion.id);
+            return (
+              <TableRow key={criterion.id}>
+                <TableCell>
+                  <Typography variant="body2">{criterion.title}</Typography>
+                  {score?.comment ? (
+                    <Typography variant="caption" color="text.secondary">
+                      {score.comment}
+                    </Typography>
+                  ) : null}
+                </TableCell>
+                <TableCell align="right">
+                  {score?.points ?? '—'}/{criterion.maxPoints}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          <TableRow>
+            <TableCell sx={{ fontWeight: 700 }}>{t('projects.total')}</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700 }}>
+              {earned ?? '—'}/{brief.totalPoints}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Box>
   );
 }
 

@@ -42,8 +42,8 @@ export function MentorPage() {
   });
 
   return (
-    <Stack spacing={3} sx={{ height: 'calc(100vh - 180px)' }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+    <Stack spacing={3} sx={{ height: { xs: 'calc(100vh - 150px)', md: 'calc(100vh - 180px)' } }}>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
         <SmartToyIcon color="primary" />
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="h1">{t('mentor.title')}</Typography>
@@ -62,7 +62,12 @@ export function MentorPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexGrow: 1, minHeight: 0 }}>
         <Paper
           variant="outlined"
-          sx={{ width: { xs: '100%', md: 280 }, flexShrink: 0, overflowY: 'auto', maxHeight: '100%' }}
+          sx={{
+            width: { xs: '100%', md: 280 },
+            flexShrink: 0,
+            overflowY: 'auto',
+            maxHeight: { xs: 160, md: '100%' },
+          }}
         >
           {isPending ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} aria-busy="true">

@@ -61,7 +61,7 @@ export function ChatPage() {
   const active = (channels ?? []).find((c) => c.id === activeId) ?? group ?? null;
 
   return (
-    <Stack spacing={3} sx={{ height: 'calc(100vh - 180px)' }}>
+    <Stack spacing={3} sx={{ height: { xs: 'calc(100vh - 150px)', md: 'calc(100vh - 180px)' } }}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
         <ForumIcon color="primary" />
         <Box>
@@ -73,7 +73,12 @@ export function ChatPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ flexGrow: 1, minHeight: 0 }}>
         <Paper
           variant="outlined"
-          sx={{ width: { xs: '100%', md: 260 }, flexShrink: 0, overflowY: 'auto', maxHeight: '100%' }}
+          sx={{
+            width: { xs: '100%', md: 260 },
+            flexShrink: 0,
+            overflowY: 'auto',
+            maxHeight: { xs: 176, md: '100%' },
+          }}
         >
           <List
             dense

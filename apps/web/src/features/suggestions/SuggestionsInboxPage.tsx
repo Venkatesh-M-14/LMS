@@ -31,7 +31,7 @@ export function SuggestionsInboxPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
         <InboxIcon color="primary" />
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="h1">{t('inbox.title')}</Typography>

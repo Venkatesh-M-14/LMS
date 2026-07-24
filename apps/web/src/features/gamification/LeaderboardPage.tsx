@@ -55,7 +55,7 @@ function Row({ entry }: { entry: LeaderboardEntry }) {
           </Typography>
         </Stack>
       </TableCell>
-      <TableCell align="right">
+      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
         {t('gamification.level')} {entry.level}
       </TableCell>
       <TableCell align="right" sx={{ fontWeight: 600 }}>
@@ -106,7 +106,9 @@ export function LeaderboardPage() {
                 <TableCell>{t('gamification.rank')}</TableCell>
                 <TableCell>{t('gamification.learner')}</TableCell>
                 <TableCell>{t('gamification.progress')}</TableCell>
-                <TableCell align="right">{t('gamification.level')}</TableCell>
+                <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  {t('gamification.level')}
+                </TableCell>
                 <TableCell align="right">{t('gamification.xp')}</TableCell>
               </TableRow>
             </TableHead>
